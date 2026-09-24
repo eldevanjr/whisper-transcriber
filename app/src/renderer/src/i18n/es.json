@@ -154,6 +154,7 @@
     "progressExtract": "Progreso de la extracción del audio",
     "progressTimes": "{{processed}} de {{total}}",
     "remaining": "faltan {{time}}",
+    "trackPass": "{{name}} ({{n}} de {{count}})",
     "player": {
       "videoMissing": "Video original no encontrado o no compatible; se reproduce el audio guardado.",
       "unavailable": "El medio aún no está disponible.",
@@ -163,6 +164,7 @@
     "chat": {
       "title": "Fragmentos",
       "typing": "Transcribiendo…",
+      "laterTracks": "Rehaciendo una pista a la vez: los fragmentos de los Otros entran cuando termine tu pista, en el orden de la conversación.",
       "empty": "Los fragmentos aparecen aquí mientras avanza la transcripción.",
       "seek": "Ir a {{time}}"
     },
@@ -322,6 +324,17 @@
     "systemAudioHint": "Lo que suena en el equipo, como las voces de la llamada.",
     "systemUnavailable": "No disponible en este sistema.",
     "systemNotNow": "No se pudo capturar el audio del equipo ahora; la sesión sigue solo con el micrófono.",
+    "monitorVolume": "Volumen de captura del audio del equipo",
+    "monitorVolumeValue": "{{value}} %",
+    "monitorVolumeHint": "Cuánto del sonido de “{{sink}}” llega a la transcripción de los Otros. No cambia lo que escuchas. Es un ajuste del sistema: también afecta a otros programas que graban esta salida.",
+    "monitorLowShort": "Demasiado bajo: las voces de los Otros llegarán en silencio.",
+    "monitorLow": "El audio del equipo llega casi en silencio ({{value}} %): las voces de los Otros no se transcribirán.",
+    "monitorMuted": "El audio del equipo está silenciado para la grabación: las voces de los Otros no se transcribirán.",
+    "monitorLowHint": "El volumen de captura de “{{sink}}” se bajó en el sistema. Sigues escuchando con normalidad; solo se ve afectada la grabación.",
+    "monitorFix": "Ajustar al 100 %",
+    "noSignal": "No llegó ningún sonido del equipo en los primeros {{seconds}} s.",
+    "noSignalHint": "Si algo está sonando (la llamada, un video), el sonido no llega a la app: comprueba que sale por la salida de audio predeterminada del sistema y que su volumen no está en cero.",
+    "noSignalHintMac": "En macOS, comprueba también que la app tiene el permiso de Grabación de pantalla en Ajustes del Sistema > Privacidad y seguridad.",
     "pause": "Pausa que cierra una frase",
     "pauseValue": "{{value}} s",
     "pauseHint": "Menor: el texto aparece antes. Mayor: frases más completas. 1,0 s sirve para conversaciones.",

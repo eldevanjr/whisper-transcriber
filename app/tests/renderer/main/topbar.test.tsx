@@ -43,6 +43,36 @@ describe('TopBar', () => {
     expect(screen.getByText('4,0×')).toBeInTheDocument()
   })
 
+  it('refazer do ao vivo: mostra a faixa e o restante soma as faixas que faltam', async () => {
+    const job = makeMeta({ fileName: 'Reunião', status: 'processing' })
+    const api = new FakeApi()
+    api.entries = [job]
+    api.current = job.id
+    await renderWithApp(<TopBar />, { api })
+    const progress = { type: 'progress' as const, jobId: job.id, totalS: 240, speed: 4 }
+    act(() => {
+      api.emitQueue({
+        ...progress,
+        pct: 12.5,
+        processedS: 60,
+        pass: { track: 'voce', index: 0, count: 2 }
+      })
+    })
+    expect(screen.getByText('Você (1 de 2)')).toBeInTheDocument()
+    expect(screen.getByText('01:00 de 04:00')).toBeInTheDocument()
+    expect(screen.getByText('faltam 01:45')).toBeInTheDocument() // 45 s desta + 60 s da próxima
+    act(() => {
+      api.emitQueue({
+        ...progress,
+        pct: 62.5,
+        processedS: 60,
+        pass: { track: 'outros', index: 1, count: 2 }
+      })
+    })
+    expect(screen.getByText('Outros (2 de 2)')).toBeInTheDocument()
+    expect(screen.getByText('faltam 00:45')).toBeInTheDocument()
+  })
+
   it('extraindo o áudio do vídeo: a barra mostra o progresso da extração', async () => {
     const job = makeMeta({ fileName: 'reuniao.mp4', status: 'processing' })
     const api = new FakeApi()

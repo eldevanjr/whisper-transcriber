@@ -10,6 +10,7 @@ import { useAppStore } from '../../providers'
 import type { LiveSessionState } from '../../store/app-store'
 import { LevelMeter } from './LevelMeter'
 import { MicSelect } from './LiveFields'
+import { SystemAudioWarning } from './MonitorVolume'
 
 const LAG_WARN_S = 3
 const LAG_SUGGEST_S = 120
@@ -165,6 +166,9 @@ export function LiveSession({ controller }: { controller: LiveController }) {
       <main ref={list} className="min-h-0 flex-1 overflow-auto p-6">
         <div className="mx-auto flex max-w-3xl flex-col gap-4">
           {controller.deviceLost && <DeviceLost controller={controller} />}
+          {controller.tracks.includes('outros') && (
+            <SystemAudioWarning level={controller.levels.outros} />
+          )}
           <Lag seconds={session.lag} />
           <h2 id={titleId} className="text-sm font-semibold tracking-wide text-muted uppercase">
             {t('live.conversation')}

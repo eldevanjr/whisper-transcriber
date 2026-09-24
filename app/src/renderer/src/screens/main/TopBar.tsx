@@ -9,17 +9,35 @@ import { ProgressBar } from '../../components/Progress'
 import { useQueueActions } from '../../hooks/useQueueActions'
 import { useAppStore } from '../../providers'
 import type { Progress } from '../../store/app-store'
+import type { Track } from '../../../../shared/settings'
+
+const TRACK_NAME: Record<Track, string> = { voce: 'live.you', outros: 'live.others' }
+
+/** Refazer do ao vivo: as faixas que ainda faltam têm a mesma duração da atual. */
+function remainingS(progress: Progress): number {
+  const later = progress.pass ? progress.pass.count - progress.pass.index - 1 : 0
+  return (progress.totalS - progress.processedS + later * progress.totalS) / progress.speed
+}
 
 function Times({ progress }: { progress: Progress }) {
   const { t, i18n } = useTranslation()
-  const remaining =
-    progress.speed > 0 ? (progress.totalS - progress.processedS) / progress.speed : null
+  const remaining = progress.speed > 0 ? remainingS(progress) : null
+  const { pass } = progress
   const speed = new Intl.NumberFormat(i18n.language, {
     minimumFractionDigits: 1,
     maximumFractionDigits: 1
   }).format(progress.speed)
   return (
     <span className="flex gap-3 text-xs whitespace-nowrap text-muted tabular-nums">
+      {pass && (
+        <span>
+          {t('main.trackPass', {
+            name: t(TRACK_NAME[pass.track]),
+            n: pass.index + 1,
+            count: pass.count
+          })}
+        </span>
+      )}
       <span>
         {t('main.progressTimes', {
           processed: formatTime(progress.processedS),

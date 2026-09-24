@@ -78,6 +78,8 @@ export const api: TranscriberApi = {
   app: { info: () => invoke(IPC.appInfo) },
   live: {
     capabilities: () => invoke(IPC.liveCapabilities),
+    monitorVolume: () => invoke(IPC.liveMonitorVolume),
+    setMonitorVolume: (percent) => invoke(IPC.liveSetMonitorVolume, percent),
     start: (input) => invoke(IPC.liveStart, input),
     stop: () => invoke(IPC.liveStop),
     pause: () => invoke(IPC.livePause),

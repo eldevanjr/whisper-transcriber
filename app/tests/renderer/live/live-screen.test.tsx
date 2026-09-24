@@ -424,6 +424,138 @@ describe('Ao vivo — sessão', () => {
   })
 })
 
+describe('Ao vivo — volume de captura do áudio do computador', () => {
+  it('avisa na preparação quando os Outros vão chegar mudos e corrige com um clique', async () => {
+    const api = new FakeApi()
+    api.live.monitorVolume.mockResolvedValue({ sink: 'Fone USB', percent: 8, muted: true })
+    const { user, container } = await open({ api })
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent('silenciado para gravação')
+    expect(alert).toHaveTextContent('“Fone USB”')
+    await expectAccessible(container)
+    await user.click(within(alert).getByRole('button', { name: 'Ajustar para 100%' }))
+    expect(api.live.setMonitorVolume).toHaveBeenCalledWith(100)
+    await waitFor(() => {
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    })
+  })
+
+  it('volume bom ou sem o áudio do computador: nenhum aviso', async () => {
+    const api = new FakeApi()
+    api.live.monitorVolume.mockResolvedValue({ sink: 'Fone USB', percent: 100, muted: false })
+    await open({ api })
+    await waitFor(() => {
+      expect(api.live.monitorVolume).toHaveBeenCalled()
+    })
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('na sessão, avisa se outro programa baixar o volume no meio da conversa', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    try {
+      const { api } = await startSession()
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+      api.live.monitorVolume.mockResolvedValue({ sink: 'Fone USB', percent: 20, muted: false })
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(5000)
+      })
+      expect(await screen.findByRole('alert')).toHaveTextContent('quase mudo (20%)')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+})
+
+describe('Ao vivo — áudio do computador sem sinal (todos os sistemas)', () => {
+  const NO_SIGNAL = /Nenhum som do computador chegou nos primeiros 15 s/
+
+  async function silentFor(ms: number) {
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(ms)
+    })
+  }
+
+  it('avisa quando nada chega em 15 s e some quando o som chega', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    try {
+      const { media, container } = await open()
+      act(() => {
+        media.last.block('outros', 0, 0.0001) // o quase mudo do monitor: conta como silêncio
+      })
+      await silentFor(14_000)
+      expect(screen.queryByText(NO_SIGNAL)).not.toBeInTheDocument()
+      await silentFor(1_000)
+      expect(screen.getByText(NO_SIGNAL)).toBeInTheDocument()
+      expect(screen.queryByText(/Gravação de tela/)).not.toBeInTheDocument() // só no macOS
+      await expectAccessible(container)
+      act(() => {
+        media.last.block('outros', 1, 0.05)
+      })
+      expect(screen.queryByText(NO_SIGNAL)).not.toBeInTheDocument()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('som logo no começo: silêncio depois é conversa normal, sem aviso', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    try {
+      const { media } = await open()
+      act(() => {
+        media.last.block('outros', 0, 0.05)
+      })
+      act(() => {
+        media.last.block('outros', 1, 0)
+      })
+      await silentFor(60_000)
+      expect(screen.queryByText(NO_SIGNAL)).not.toBeInTheDocument()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('no macOS lembra da permissão de Gravação de tela', async () => {
+    const api = new FakeApi()
+    api.app.info.mockResolvedValue({ ...APP_INFO, platform: 'darwin' })
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    try {
+      await open({ api })
+      await silentFor(15_000)
+      expect(screen.getByText(NO_SIGNAL)).toBeInTheDocument()
+      expect(screen.getByText(/permissão de Gravação de tela/)).toBeInTheDocument()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('com o volume do monitor baixo (Linux), só o aviso que explica e corrige', async () => {
+    const api = new FakeApi()
+    api.live.monitorVolume.mockResolvedValue({ sink: 'Fone USB', percent: 8, muted: false })
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    try {
+      await open({ api })
+      await silentFor(15_000)
+      expect(screen.getByRole('alert')).toHaveTextContent('quase mudo (8%)')
+      expect(screen.queryByText(NO_SIGNAL)).not.toBeInTheDocument()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('sem a faixa dos Outros aberta, nenhum aviso de sinal', async () => {
+    const media = new FakeLiveMedia()
+    media.systemWorks = false
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    try {
+      await open({ media })
+      await silentFor(15_000)
+      expect(screen.queryByText(NO_SIGNAL)).not.toBeInTheDocument()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+})
+
 describe('Ao vivo — outros idiomas', () => {
   it('em inglês', async () => {
     const media = new FakeLiveMedia()

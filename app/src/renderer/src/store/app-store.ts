@@ -9,7 +9,8 @@ import {
   Phase,
   QueueEvent,
   QueueState,
-  SystemInfo
+  SystemInfo,
+  type TrackPass
 } from '../../../shared/events'
 import type { HistoryMeta, Segment } from '../../../shared/history'
 import type { AppInfo, TranscriberApi } from '../../../shared/ipc'
@@ -21,6 +22,7 @@ export interface Progress {
   processedS: number
   totalS: number
   speed: number
+  pass: TrackPass | null
 }
 
 export interface LiveJob {
@@ -165,7 +167,8 @@ function onProgress(
   const { pct, processedS, totalS, speed } = event
   // A fase só vem nas transições: depois de recarregar a tela, progresso implica transcrição.
   const phase = state.live[event.jobId]?.phase ?? 'transcribing'
-  return withLive(state, event.jobId, { phase, progress: { pct, processedS, totalS, speed } })
+  const progress = { pct, processedS, totalS, speed, pass: event.pass ?? null }
+  return withLive(state, event.jobId, { phase, progress })
 }
 
 function reduceQueue(state: AppState, event: QueueEvent): Partial<AppState> {
