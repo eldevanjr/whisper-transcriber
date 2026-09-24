@@ -56,7 +56,14 @@ export async function launch(
     )
   )
   const app = await electron.launch({
-    args: [APP_DIR, '--no-sandbox', '--lang=pt-BR'],
+    args: [
+      APP_DIR,
+      '--no-sandbox',
+      '--lang=pt-BR',
+      // Microfone falso do Chromium (um tom contínuo), sem pedir permissão: testa o ao vivo.
+      '--use-fake-ui-for-media-stream',
+      '--use-fake-device-for-media-stream'
+    ],
     colorScheme: null, // o Playwright forçaria "light"; o tema vem do nativeTheme do app
     env: {
       ...base,
