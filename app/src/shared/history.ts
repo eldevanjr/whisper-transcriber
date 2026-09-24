@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { TRACKS } from './settings'
+import { TRACKS, type Track } from './settings'
 import { ERROR_CODES, type ErrorCode } from './errors'
 import { MODEL_IDS } from './models'
 
@@ -42,6 +42,7 @@ export interface Segment {
   start: number
   end: number
   text: string
+  speaker?: Track // ao vivo: quem falou
 }
 
 export const TranscriptEntrySchema = z.object({
@@ -55,7 +56,13 @@ export type TranscriptEntry = z.infer<typeof TranscriptEntrySchema>
 const round3 = (value: number): number => Math.round(value * 1000) / 1000
 
 export function toTranscriptEntry(segment: Segment): TranscriptEntry {
-  return { inicio: round3(segment.start), fim: round3(segment.end), texto: segment.text }
+  const entry: TranscriptEntry = {
+    inicio: round3(segment.start),
+    fim: round3(segment.end),
+    texto: segment.text
+  }
+  if (segment.speaker) entry.falante = segment.speaker
+  return entry
 }
 
 export const JOB_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/

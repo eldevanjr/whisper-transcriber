@@ -3,6 +3,7 @@ import type {
   DownloadEvent,
   DownloadTarget,
   EnqueueResult,
+  LiveEvent,
   QueueEvent,
   QueueState,
   SystemInfo,
@@ -11,7 +12,7 @@ import type {
 } from './events'
 import type { HistoryList, HistoryMeta, StorageStats, TranscriptEntry } from './history'
 import type { ModelFormat, ModelId } from './models'
-import type { Settings, SettingsPatch } from './settings'
+import type { Settings, SettingsPatch, Track } from './settings'
 
 export type IpcResult<T> = { ok: true; data: T } | { ok: false; error: ErrorInfo }
 
@@ -44,15 +45,31 @@ export const IPC = {
   openDataFolder: 'shell:open-data-folder',
   updatesCheck: 'updates:check',
   updatesInstall: 'updates:install',
-  appInfo: 'app:info'
+  appInfo: 'app:info',
+  liveStart: 'live:start',
+  liveStop: 'live:stop',
+  livePause: 'live:pause',
+  liveResume: 'live:resume'
 } as const
 
 export const EVENTS = {
   queue: 'event:queue',
   download: 'event:download',
   settings: 'event:settings',
-  update: 'event:update'
+  update: 'event:update',
+  live: 'event:live'
 } as const
+
+/** Canais sem resposta (renderer → main): os blocos de áudio do ao vivo, 10 por segundo. */
+export const SEND = {
+  liveAudio: 'live:audio'
+} as const
+
+export interface LiveStartInput {
+  tracks: Track[]
+  test: boolean
+  title: string
+}
 
 export interface HistoryDetail {
   meta: HistoryMeta
@@ -146,4 +163,13 @@ export interface TranscriberApi {
     onEvent(callback: (event: UpdateEvent) => void): () => void
   }
   app: { info(): Promise<AppInfo> }
+  live: {
+    start(input: LiveStartInput): Promise<{ sessionId: string; itemId: string | null }>
+    stop(): Promise<HistoryMeta | null>
+    pause(): Promise<null>
+    resume(): Promise<null>
+    /** Bloco de 100 ms (4800 amostras a 48 kHz) de uma faixa; sem resposta. */
+    sendAudio(track: Track, seq: number, pcm: Int16Array): void
+    onEvent(callback: (event: LiveEvent) => void): Unsubscribe
+  }
 }

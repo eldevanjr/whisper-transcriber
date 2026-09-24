@@ -15,6 +15,7 @@ import {
 } from '../../shared/history'
 import { fileNameOf, type MediaKind } from '../../shared/media'
 import type { ModelId } from '../../shared/models'
+import type { Track } from '../../shared/settings'
 import { dirSize, isNotFound, readJson, writeJsonAtomic } from '../fs-utils'
 
 export interface JobPaths {
@@ -23,11 +24,19 @@ export interface JobPaths {
   transcript: string
   partial: string
   audio: string
+  live: string // ao vivo: a transcrição feita na hora, guardada quando houver a refeita
 }
 
 export interface NewJob {
   sourcePath: string
   mediaKind: MediaKind
+  model: ModelId
+  language: string | null
+}
+
+export interface NewLiveSession {
+  title: string
+  tracks: Track[]
   model: ModelId
   language: string | null
 }
@@ -49,7 +58,8 @@ export class HistoryStore {
       meta: join(dir, 'meta.json'),
       transcript: join(dir, 'transcript.json'),
       partial: join(dir, 'transcript.partial.jsonl'),
-      audio: join(dir, 'audio.m4a')
+      audio: join(dir, 'audio.m4a'),
+      live: join(dir, 'transcript-live.json')
     }
   }
 
@@ -67,6 +77,28 @@ export class HistoryStore {
       duration: null,
       error: null,
       kind: 'file'
+    }
+    await writeJsonAtomic(this.paths(meta.id).meta, meta)
+    return meta
+  }
+
+  /** Sessão ao vivo: começa em processamento (a gravação e os trechos vêm enquanto dura). */
+  async createLive(session: NewLiveSession): Promise<HistoryMeta> {
+    const meta: HistoryMeta = {
+      id: this.newId(),
+      fileName: session.title,
+      sourcePath: '',
+      mediaKind: 'audio',
+      createdAt: this.now().toISOString(),
+      status: 'processing',
+      model: session.model,
+      language: session.language,
+      languageDetected: null,
+      duration: null,
+      error: null,
+      kind: 'live',
+      tracks: session.tracks,
+      activeVersion: 'live'
     }
     await writeJsonAtomic(this.paths(meta.id).meta, meta)
     return meta
@@ -121,6 +153,13 @@ export class HistoryStore {
     const entries = (await readSegments(partial)).map(toTranscriptEntry)
     await writeJsonAtomic(transcript, entries)
     await rm(partial, { force: true })
+    return entries
+  }
+
+  /** Ao vivo: a transcrição ativa e a cópia da versão ao vivo (preservada se houver a refeita). */
+  async finalizeLive(id: string): Promise<TranscriptEntry[]> {
+    const entries = await this.finalize(id)
+    await writeJsonAtomic(this.paths(id).live, entries)
     return entries
   }
 

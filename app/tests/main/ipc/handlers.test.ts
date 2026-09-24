@@ -6,7 +6,7 @@ import {
   type Services
 } from '../../../src/main/ipc/handlers'
 import { AppError } from '../../../src/shared/errors'
-import { IPC } from '../../../src/shared/ipc'
+import { IPC, SEND } from '../../../src/shared/ipc'
 import { DEFAULT_SETTINGS, type Settings } from '../../../src/shared/settings'
 
 const JOB = '11111111-1111-4111-8111-111111111111'
@@ -70,12 +70,23 @@ function setup(settingsOverride: Partial<Settings> = {}) {
     installUpdate: vi.fn(),
     dataDir: '/dados',
     appInfo: vi.fn(() => ({ version: '0.1.0', platform: 'linux', settingsRecovered: false })),
-    externalUrls: new Set(['https://github.com/facebook/react'])
+    externalUrls: new Set(['https://github.com/facebook/react']),
+    live: {
+      start: vi.fn(() => Promise.resolve({ sessionId: 's', itemId: null })),
+      stop: vi.fn(() => Promise.resolve(null)),
+      pause: vi.fn(),
+      resume: vi.fn(),
+      audio: vi.fn()
+    }
   }
+  const senders = new Map<string, (event: IpcEventLike, arg?: unknown) => void>()
   registerIpcHandlers(
     {
       handle: (channel, listener) => {
         handlers.set(channel, (event, arg) => Promise.resolve(listener(event, arg)))
+      },
+      on: (channel, listener) => {
+        senders.set(channel, listener)
       }
     },
     services as unknown as Services,
@@ -86,7 +97,10 @@ function setup(settingsOverride: Partial<Settings> = {}) {
     if (!handler) throw new Error(`canal não registrado: ${channel}`)
     return handler(event, arg)
   }
-  return { call, services, handlers }
+  const send = (channel: string, arg: unknown, event: IpcEventLike = TRUSTED) => {
+    senders.get(channel)?.(event, arg)
+  }
+  return { call, send, services, handlers }
 }
 
 const ok = (data: unknown) => ({ ok: true, data })
@@ -276,5 +290,45 @@ describe('sanitizeFileName', () => {
     ['x'.repeat(300), 'x'.repeat(200)]
   ])('%s → %s', (input, expected) => {
     expect(sanitizeFileName(input)).toBe(expected)
+  })
+})
+
+describe('IPC do ao vivo', () => {
+  it('start valida as faixas, o modo teste e o título', async () => {
+    const { call, services } = setup()
+    const opts = { tracks: ['voce', 'outros'], test: false, title: 'Reunião 23/09 10:00' }
+    expect(await call(IPC.liveStart, opts)).toEqual(ok({ sessionId: 's', itemId: null }))
+    expect(services.live.start).toHaveBeenCalledWith(opts)
+    for (const bad of [
+      { ...opts, tracks: [] },
+      { ...opts, tracks: ['voce', 'voce'] },
+      { ...opts, tracks: ['alguem'] },
+      { ...opts, title: 'x'.repeat(201) },
+      { ...opts, test: 'sim' }
+    ]) {
+      expect(await call(IPC.liveStart, bad)).toEqual(fail('INVALID_REQUEST'))
+    }
+  })
+
+  it('stop, pausa e retomar', async () => {
+    const { call, services } = setup()
+    expect(await call(IPC.liveStop)).toEqual(ok(null))
+    expect(await call(IPC.livePause)).toEqual(ok(null))
+    expect(await call(IPC.liveResume)).toEqual(ok(null))
+    expect(services.live.stop).toHaveBeenCalled()
+    expect(services.live.pause).toHaveBeenCalled()
+    expect(services.live.resume).toHaveBeenCalled()
+  })
+
+  it('blocos de áudio: só do app e só no formato certo (100 ms a 48 kHz)', () => {
+    const { send, services } = setup()
+    const pcm = new Int16Array(4800).fill(7)
+    send(SEND.liveAudio, { track: 'voce', seq: 3, pcm })
+    expect(services.live.audio).toHaveBeenCalledWith('voce', 3, pcm)
+    send(SEND.liveAudio, { track: 'voce', seq: 4, pcm }, { sender: 'outro', senderFrame: null })
+    send(SEND.liveAudio, { track: 'voce', seq: 5, pcm: new Int16Array(10) })
+    send(SEND.liveAudio, { track: 'alguem', seq: 6, pcm })
+    send(SEND.liveAudio, { track: 'voce', seq: -1, pcm })
+    expect(services.live.audio).toHaveBeenCalledTimes(1)
   })
 })

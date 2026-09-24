@@ -1,9 +1,10 @@
 import { z } from 'zod'
 import { AppError, toAppError } from '../../shared/errors'
 import type { SystemInfo, UpdateInfo } from '../../shared/events'
-import { isJobId } from '../../shared/history'
-import { IPC, type AppInfo, type IpcResult } from '../../shared/ipc'
+import { isJobId, type HistoryMeta } from '../../shared/history'
+import { IPC, SEND, type AppInfo, type IpcResult, type LiveStartInput } from '../../shared/ipc'
 import { formatForDevice, MODEL_FORMATS, MODEL_IDS } from '../../shared/models'
+import { TRACKS, type Track } from '../../shared/settings'
 import type { Installer } from '../downloads/installer'
 import { pathExists } from '../fs-utils'
 import type { HistoryStore } from '../history/store'
@@ -15,6 +16,7 @@ export type IpcEventLike = SenderEvent
 
 export interface IpcMainLike {
   handle(channel: string, listener: (event: IpcEventLike, ...args: unknown[]) => unknown): void
+  on(channel: string, listener: (event: IpcEventLike, ...args: unknown[]) => void): void
 }
 
 export interface Services {
@@ -35,6 +37,13 @@ export interface Services {
   appInfo(): AppInfo
   /** Links extras permitidos (páginas dos projetos em Licenças). */
   externalUrls: ReadonlySet<string>
+  live: {
+    start(input: LiveStartInput): Promise<{ sessionId: string; itemId: string | null }>
+    stop(): Promise<HistoryMeta | null>
+    pause(): void
+    resume(): void
+    audio(track: Track, seq: number, pcm: Int16Array): void
+  }
 }
 
 const None = z.undefined()
@@ -55,6 +64,22 @@ const SaveSchema = z.object({
 })
 const TextSchema = z.string().max(50_000_000)
 const UrlSchema = z.string().max(2048)
+const TrackSchema = z.enum(TRACKS)
+const LiveStartSchema = z.object({
+  tracks: z
+    .array(TrackSchema)
+    .min(1)
+    .max(2)
+    .refine((tracks) => new Set(tracks).size === tracks.length, 'faixas repetidas'),
+  test: z.boolean(),
+  title: z.string().min(1).max(200)
+})
+const BLOCK_48K = 4800 // 100 ms a 48 kHz
+const LiveAudioSchema = z.object({
+  track: TrackSchema,
+  seq: z.number().int().min(0),
+  pcm: z.instanceof(Int16Array).refine((pcm) => pcm.length === BLOCK_48K, 'bloco de 100 ms')
+})
 
 type On = <S extends z.ZodType>(
   channel: string,
@@ -101,6 +126,27 @@ export function registerIpcHandlers(
   registerHistory(on, services)
   registerDownloads(on, services)
   registerSystem(on, services)
+  registerLive(on, services)
+  // Blocos de áudio: canal sem resposta (send), validado e só do renderer do app.
+  ipc.on(SEND.liveAudio, (event, raw) => {
+    const parsed = LiveAudioSchema.safeParse(raw)
+    if (isTrusted(event) && parsed.success) {
+      services.live.audio(parsed.data.track, parsed.data.seq, parsed.data.pcm)
+    }
+  })
+}
+
+function registerLive(on: On, s: Services): void {
+  on(IPC.liveStart, LiveStartSchema, (input) => s.live.start(input))
+  on(IPC.liveStop, None, () => s.live.stop())
+  on(IPC.livePause, None, () => {
+    s.live.pause()
+    return null
+  })
+  on(IPC.liveResume, None, () => {
+    s.live.resume()
+    return null
+  })
 }
 
 function registerSettingsAndQueue(on: On, s: Services): void {

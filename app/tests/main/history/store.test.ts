@@ -1,4 +1,4 @@
-import { appendFile, mkdir, writeFile } from 'node:fs/promises'
+import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { HistoryStore } from '../../../src/main/history/store'
@@ -177,5 +177,48 @@ describe('HistoryStore', () => {
     expect(cleared.count).toBe(1)
     expect(await store.list()).toEqual({ entries: [], corrupted: [] })
     expect(await pathExists(root)).toBe(true)
+  })
+})
+
+describe('HistoryStore — ao vivo', () => {
+  it('createLive cria o item ao vivo em processamento, com as faixas e a versão ao vivo', async () => {
+    const { store } = await makeStore()
+    const meta = await store.createLive({
+      title: 'Reunião 23/09 10:00',
+      tracks: ['voce', 'outros'],
+      model: 'medium',
+      language: null
+    })
+    expect(meta).toMatchObject({
+      kind: 'live',
+      fileName: 'Reunião 23/09 10:00',
+      sourcePath: '',
+      mediaKind: 'audio',
+      status: 'processing',
+      tracks: ['voce', 'outros'],
+      activeVersion: 'live'
+    })
+    expect(await pathExists(store.paths(meta.id).dir)).toBe(true)
+    expect(await store.get(meta.id)).toEqual(meta)
+  })
+
+  it('finalizeLive grava a transcrição com o falante e guarda a cópia ao vivo', async () => {
+    const { store } = await makeStore()
+    const meta = await store.createLive({
+      title: 'R',
+      tracks: ['voce'],
+      model: 'small',
+      language: 'pt'
+    })
+    await store.appendSegment(meta.id, { start: 0, end: 1.5, text: 'Oi.', speaker: 'voce' })
+    await store.appendSegment(meta.id, { start: 2, end: 3, text: 'Tudo bem?', speaker: 'outros' })
+    const entries = await store.finalizeLive(meta.id)
+    expect(entries).toEqual([
+      { inicio: 0, fim: 1.5, texto: 'Oi.', falante: 'voce' },
+      { inicio: 2, fim: 3, texto: 'Tudo bem?', falante: 'outros' }
+    ])
+    const { transcript, live } = store.paths(meta.id)
+    expect(JSON.parse(await readFile(live, 'utf8'))).toEqual(entries)
+    expect(JSON.parse(await readFile(transcript, 'utf8'))).toEqual(entries)
   })
 })

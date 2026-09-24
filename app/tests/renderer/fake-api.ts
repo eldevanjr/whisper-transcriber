@@ -1,6 +1,7 @@
 import { vi } from 'vitest'
 import type {
   DownloadEvent,
+  LiveEvent,
   QueueEvent,
   SystemInfo,
   UpdateEvent,
@@ -93,7 +94,8 @@ export class FakeApi implements TranscriberApi {
       this.queueListeners.size +
       this.downloadListeners.size +
       this.settingsListeners.size +
-      this.updateListeners.size
+      this.updateListeners.size +
+      this.liveListeners.size
     )
   }
 
@@ -178,6 +180,20 @@ export class FakeApi implements TranscriberApi {
   }
 
   private readonly updateListeners = new Set<Listener<UpdateEvent>>()
+  private readonly liveListeners = new Set<Listener<LiveEvent>>()
+
+  emitLive(event: LiveEvent): void {
+    for (const listener of this.liveListeners) listener(event)
+  }
+
+  live = {
+    start: vi.fn(() => Promise.resolve({ sessionId: 's1', itemId: null as string | null })),
+    stop: vi.fn(() => Promise.resolve(null as HistoryMeta | null)),
+    pause: vi.fn(() => Promise.resolve(null)),
+    resume: vi.fn(() => Promise.resolve(null)),
+    sendAudio: vi.fn(),
+    onEvent: (callback: Listener<LiveEvent>) => subscribe(this.liveListeners, callback)
+  }
 
   emitUpdate(event: UpdateEvent): void {
     for (const listener of this.updateListeners) listener(event)

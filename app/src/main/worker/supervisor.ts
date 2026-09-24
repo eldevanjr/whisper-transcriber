@@ -122,6 +122,14 @@ export class WorkerSupervisor implements WorkerPort {
     })
   }
 
+  /** Sem resposta (blocos do ao vivo): só com o processo já de pé; devolve se enviou. */
+  notify(command: WorkerCommand): boolean {
+    const running = this.running
+    if (running === null || running.detached) return false
+    running.child.stdin.write(serializeCommand(randomUUID(), command))
+    return true
+  }
+
   kill(): void {
     if (this.running) this.stop(this.running, 'canceled')
   }

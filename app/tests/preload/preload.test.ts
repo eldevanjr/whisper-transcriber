@@ -2,13 +2,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const electron = vi.hoisted(() => ({
   contextBridge: { exposeInMainWorld: vi.fn() },
-  ipcRenderer: { invoke: vi.fn(), on: vi.fn(), removeListener: vi.fn() },
+  ipcRenderer: { invoke: vi.fn(), send: vi.fn(), on: vi.fn(), removeListener: vi.fn() },
   webUtils: { getPathForFile: vi.fn(() => '/caminho/arquivo.mp4') }
 }))
 vi.mock('electron', () => electron)
 
 const { api } = await import('../../src/preload/index')
-const { EVENTS, IPC } = await import('../../src/shared/ipc')
+const { EVENTS, IPC, SEND } = await import('../../src/shared/ipc')
 
 describe('preload', () => {
   beforeEach(() => {
@@ -62,7 +62,15 @@ describe('preload', () => {
       [() => api.system.openExternal('https://x'), IPC.openExternal, 'https://x'],
       [() => api.system.openDataFolder(), IPC.openDataFolder, undefined],
       [() => api.updates.check(), IPC.updatesCheck, undefined],
-      [() => api.updates.install(), IPC.updatesInstall, undefined]
+      [() => api.updates.install(), IPC.updatesInstall, undefined],
+      [
+        () => api.live.start({ tracks: ['voce'], test: true, title: 'T' }),
+        IPC.liveStart,
+        { tracks: ['voce'], test: true, title: 'T' }
+      ],
+      [() => api.live.stop(), IPC.liveStop, undefined],
+      [() => api.live.pause(), IPC.livePause, undefined],
+      [() => api.live.resume(), IPC.liveResume, undefined]
     ]
     for (const [run, channel, arg] of calls) {
       await expect(run()).resolves.toBe('r')
@@ -84,7 +92,8 @@ describe('preload', () => {
       [(cb) => api.settings.onChanged(cb), EVENTS.settings],
       [(cb) => api.queue.onEvent(cb), EVENTS.queue],
       [(cb) => api.downloads.onEvent(cb), EVENTS.download],
-      [(cb) => api.updates.onEvent(cb), EVENTS.update]
+      [(cb) => api.updates.onEvent(cb), EVENTS.update],
+      [(cb) => api.live.onEvent(cb), EVENTS.live]
     ]
     for (const [subscribe, channel] of subscriptions) {
       const callback = vi.fn()
@@ -96,6 +105,16 @@ describe('preload', () => {
       unsubscribe()
       expect(electron.ipcRenderer.removeListener).toHaveBeenLastCalledWith(channel, listener)
     }
+  })
+
+  it('blocos de áudio do ao vivo vão por send (sem resposta)', () => {
+    const pcm = new Int16Array(4800)
+    api.live.sendAudio('voce', 7, pcm)
+    expect(electron.ipcRenderer.send).toHaveBeenCalledWith(SEND.liveAudio, {
+      track: 'voce',
+      seq: 7,
+      pcm
+    })
   })
 
   it('pathFor usa webUtils (File.path não existe mais no Electron)', () => {

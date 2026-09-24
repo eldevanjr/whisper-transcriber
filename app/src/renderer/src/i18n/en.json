@@ -51,7 +51,9 @@
     "report": "Report a problem",
     "GPU_FAILED": "The GPU failed. Transcription continued on the CPU.",
     "LIVE_NOT_STARTED": "No live session is running.",
-    "LIVE_ACTIVE": "A live transcription is already running."
+    "LIVE_ACTIVE": "A live transcription is already running.",
+    "QUEUE_BUSY": "Wait for the queue to finish (or cancel the current file) to start live.",
+    "MIC_DENIED": "Microphone access was denied."
   },
   "notices": {
     "cudaFallback": "The GPU failed; this transcription continued on the CPU.",

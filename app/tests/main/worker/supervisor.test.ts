@@ -115,6 +115,18 @@ describe('WorkerSupervisor', () => {
     await other
   })
 
+  it('notify envia sem esperar resposta, só com o processo de pé', async () => {
+    const ctx = setup()
+    const block = { cmd: 'live_stop', params: { session_id: 's' } } as const
+    expect(ctx.supervisor.notify(block)).toBe(false) // nenhum processo: não inicia um só para isso
+    const pending = ctx.supervisor.request({ cmd: 'self_test' })
+    const child = await started(ctx)
+    child.send({ type: 'result', id: child.lastCommand().id, data: {} })
+    await pending
+    expect(ctx.supervisor.notify(block)).toBe(true)
+    expect(child.lastCommand()).toMatchObject({ cmd: 'live_stop', params: { session_id: 's' } })
+  })
+
   it('erro do worker rejeita com o código dele', async () => {
     const ctx = setup()
     const pending = ctx.supervisor.request({ cmd: 'self_test' })

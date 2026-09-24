@@ -25,6 +25,7 @@ import { Installer } from './downloads/installer'
 import { parseManifest } from './downloads/manifest'
 import { HistoryStore } from './history/store'
 import { registerIpcHandlers, type Services } from './ipc/handlers'
+import { LiveService } from './live/session'
 import { createMediaHandler, MEDIA_SCHEME } from './media-protocol'
 import { appPaths, modelDir } from './paths'
 import { TranscriptionQueue } from './queue/queue'
@@ -100,7 +101,10 @@ async function main(): Promise<void> {
     envFor: (device) =>
       workerEnv(process.env, { platform: process.platform, device, cudaDir: paths.cuda }),
     expectedVersion: app.getVersion(),
-    logger
+    logger,
+    onLiveEvent: (event) => {
+      live.onWorkerEvent(event)
+    }
   })
   const installer = new Installer({
     manifest,
@@ -133,6 +137,19 @@ async function main(): Promise<void> {
     },
     logger,
     hasModel: (id, format) => installer.isModelInstalled(id, format)
+  })
+  const live = new LiveService({
+    worker,
+    queue,
+    history,
+    settings,
+    emit: (event) => {
+      send(EVENTS.live, event)
+    },
+    onItem: (meta) => {
+      send(EVENTS.queue, { type: 'job', meta })
+    },
+    logger
   })
 
   protocol.handle(MEDIA_SCHEME, createMediaHandler({ history }))
@@ -184,6 +201,7 @@ async function main(): Promise<void> {
     },
     dataDir: paths.root,
     externalUrls: licenseUrls(licensesJson),
+    live,
     appInfo: () => ({
       version: app.getVersion(),
       platform: process.platform,
@@ -216,6 +234,10 @@ async function main(): Promise<void> {
   })
   await (rendererUrl ? window.loadURL(rendererUrl) : window.loadFile(indexHtml))
   await queue.restore()
+  // Sessões ao vivo que caíram com o app: a gravação vira m4a e o item fica "Interrompida".
+  live.recover().catch((error: unknown) => {
+    logger.error(`[ao vivo] recuperação falhou: ${String(error)}`)
+  })
   logger.info(`app pronto (versão ${app.getVersion()})`)
 
   app.on('second-instance', () => {

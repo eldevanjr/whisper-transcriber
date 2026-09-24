@@ -57,6 +57,7 @@ export class TranscriptionQueue {
   private canceledId: string | null = null
   private stopping = false
   private testing = false
+  private live = false // sessão ao vivo: o worker é dela, a fila espera
   // Configurações em que a GPU já falhou nesta sessão: até mudarem, os jobs vão direto para a CPU.
   private gpuFailedFor: Settings | null = null
   private fallback: Target = { device: 'cpu', configured: 'cpu' }
@@ -172,7 +173,37 @@ export class TranscriptionQueue {
   }
 
   isIdle(): boolean {
-    return this.current === null && this.pending.length === 0 && !this.testing
+    return this.current === null && this.pending.length === 0 && !this.testing && !this.live
+  }
+
+  /** Ao vivo: segura a fila (arquivos novos esperam) e carrega o modelo das configurações. */
+  async holdForLive(): Promise<void> {
+    if (!this.isIdle()) {
+      throw new AppError('QUEUE_BUSY', 'Espere a fila terminar para começar o ao vivo')
+    }
+    this.live = true
+    try {
+      const settings = this.deps.settings.get()
+      const target = this.targetFor(settings)
+      await this.loadModel(requireModel(settings), target.device, target.configured)
+    } catch (error) {
+      this.releaseLive()
+      throw error
+    }
+  }
+
+  /** A GPU falhou no ao vivo: mesma regra da fila (resto da sessão na CPU). */
+  async reloadLiveOnCpu(): Promise<void> {
+    const settings = this.deps.settings.get()
+    const model = requireModel(settings)
+    this.gpuFailedFor = settings
+    this.fallback = await this.cpuTarget(model, settings)
+    await this.loadModel(model, this.fallback.device, this.fallback.configured)
+  }
+
+  releaseLive(): void {
+    this.live = false
+    this.pump()
   }
 
   whenIdle(): Promise<void> {
@@ -211,7 +242,8 @@ export class TranscriptionQueue {
   }
 
   private pump(): void {
-    if (this.current !== null || this.testing || this.stopping || this.pending.length === 0) return
+    if (this.current !== null || this.testing || this.live || this.stopping) return
+    if (this.pending.length === 0) return
     this.loop = this.drain()
   }
 

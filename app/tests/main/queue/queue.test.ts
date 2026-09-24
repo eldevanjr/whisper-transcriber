@@ -836,3 +836,44 @@ describe('TranscriptionQueue com o supervisor real', () => {
     expect(ctx.children).toHaveLength(1)
   })
 })
+
+describe('TranscriptionQueue durante o ao vivo', () => {
+  it('holdForLive carrega o modelo e segura a fila até releaseLive', async () => {
+    const ctx = await setup(transcribeOk, { device: 'cpu' })
+    await ctx.queue.holdForLive()
+    expect(ctx.worker.calls.at(-1)?.command).toMatchObject({ cmd: 'load_model' })
+    expect(ctx.queue.isIdle()).toBe(false)
+    const { accepted } = await ctx.queue.enqueue(['/a.mp3'])
+    await flush()
+    expect((await ctx.history.get(accepted[0]!.id)).status).toBe('queued') // esperando
+    ctx.queue.releaseLive()
+    await ctx.queue.whenIdle()
+    expect((await ctx.history.get(accepted[0]!.id)).status).toBe('done')
+  })
+
+  it('holdForLive recusa com a fila ocupada e libera se o modelo não carregar', async () => {
+    const ctx = await setup((command, options) =>
+      command.cmd === 'transcribe' ? new Promise(() => undefined) : transcribeOk(command, options)
+    )
+    await ctx.queue.enqueue(['/a.mp3'])
+    await flush()
+    await expect(ctx.queue.holdForLive()).rejects.toSatisfy(
+      (e: unknown) => e instanceof AppError && e.code === 'QUEUE_BUSY'
+    )
+    const broken = await setup(() => Promise.reject(new AppError('MODEL_LOAD_FAILED', 'x')))
+    await expect(broken.queue.holdForLive()).rejects.toThrow()
+    expect(broken.queue.isIdle()).toBe(true)
+  })
+
+  it('reloadLiveOnCpu troca para a CPU como na queda de GPU da fila', async () => {
+    const ctx = await setup(transcribeOk, { device: 'gpu' })
+    await ctx.queue.holdForLive()
+    expect(ctx.worker.calls.at(-1)?.options.device).toBe('gpu')
+    await ctx.queue.reloadLiveOnCpu()
+    expect(ctx.worker.calls.at(-1)?.command).toMatchObject({
+      cmd: 'load_model',
+      params: { device: 'cpu' }
+    })
+    ctx.queue.releaseLive()
+  })
+})

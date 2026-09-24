@@ -27,7 +27,9 @@ export const APP_ERROR_CODES = [
   'INSUFFICIENT_SPACE',
   'HOST_NOT_ALLOWED',
   'INVALID_REQUEST',
-  'NOT_FOUND'
+  'NOT_FOUND',
+  'QUEUE_BUSY',
+  'MIC_DENIED'
 ] as const
 
 export type ErrorCode = (typeof WORKER_ERROR_CODES)[number] | (typeof APP_ERROR_CODES)[number]

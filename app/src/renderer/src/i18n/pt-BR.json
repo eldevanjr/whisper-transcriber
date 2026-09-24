@@ -51,7 +51,9 @@
     "report": "Relatar problema",
     "GPU_FAILED": "A GPU falhou. A transcrição seguiu na CPU.",
     "LIVE_NOT_STARTED": "Nenhuma sessão ao vivo em andamento.",
-    "LIVE_ACTIVE": "Já há uma transcrição ao vivo em andamento."
+    "LIVE_ACTIVE": "Já há uma transcrição ao vivo em andamento.",
+    "QUEUE_BUSY": "Espere a fila terminar (ou cancele o arquivo atual) para começar o ao vivo.",
+    "MIC_DENIED": "O acesso ao microfone foi negado."
   },
   "notices": {
     "cudaFallback": "A GPU falhou; esta transcrição seguiu na CPU.",
