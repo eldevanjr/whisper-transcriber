@@ -1,0 +1,196 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  commits:
+    name: Commits no padrão Conventional Commits
+    # develop→main: os commits já foram checados nos PRs para a develop (e o histórico antigo
+    # anterior ao commitlint não passaria).
+    if: github.event_name == 'pull_request' && github.head_ref != 'develop'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v6
+        with:
+          package_json_file: app/package.json
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: pnpm
+          cache-dependency-path: app/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+        working-directory: app
+      - run: >-
+          pnpm exec commitlint --from ${{ github.event.pull_request.base.sha }}
+          --to ${{ github.event.pull_request.head.sha }} --verbose
+        working-directory: app
+      - name: Autor dos commits é eldevanjr@gmail.com
+        run: |
+          invalidos=$(git log --format='%h %ae' \
+            ${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }} \
+            | grep -v ' eldevanjr@gmail.com$' || true)
+          if [ -n "$invalidos" ]; then
+            echo "Commits com e-mail não permitido:"
+            echo "$invalidos"
+            exit 1
+          fi
+
+  worker:
+    name: Worker (lint, tipos, testes, auditoria, CPD)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: worker
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+      - run: uv sync --locked
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run mypy transcriber_worker
+      - run: uv run pytest
+      - run: uv run pip-audit --skip-editable
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "21"
+      - run: ../scripts/cpd.sh python transcriber_worker
+
+  worker-integration:
+    name: Worker (integração com modelo tiny)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: worker
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+      - uses: actions/cache@v6
+        with:
+          path: ~/.cache/huggingface
+          key: hf-tiny-v2
+      - run: uv sync --locked
+      - run: uv run pytest -m integration --no-cov -n 0
+
+  worker-windows:
+    name: Worker no Windows (unitários + integração)
+    # Windows só para a main (PR ou push): nos PRs para a develop roda apenas o Linux.
+    if: github.base_ref == 'main' || github.ref == 'refs/heads/main'
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: worker
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+      - uses: actions/cache@v6
+        with:
+          path: ~/.cache/huggingface
+          key: hf-tiny-windows-v2
+      - run: uv sync --locked
+      - run: uv run pytest
+      - run: uv run pytest -m integration --no-cov -n 0
+
+  app:
+    name: App (tipos, lint, formatação, testes, auditoria, CPD)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+        with:
+          package_json_file: app/package.json
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: pnpm
+          cache-dependency-path: app/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - run: pnpm format:check
+      - run: pnpm test
+      - run: pnpm audit --prod --audit-level high
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "21"
+      - run: pnpm cpd
+
+  app-integration:
+    name: App ↔ worker (contrato real)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+      - uses: actions/cache@v6
+        with:
+          path: ~/.cache/huggingface
+          key: hf-tiny-v2
+      - run: uv sync --locked
+        working-directory: worker
+      - uses: pnpm/action-setup@v6
+        with:
+          package_json_file: app/package.json
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: pnpm
+          cache-dependency-path: app/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+        working-directory: app
+      - run: pnpm test:integration
+        working-directory: app
+      - run: pnpm gen:licenses --check
+        working-directory: app
+
+  e2e:
+    name: E2E (Playwright no app Electron)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+        with:
+          package_json_file: app/package.json
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: pnpm
+          cache-dependency-path: app/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      # Ubuntu 24 não dá SUID ao chrome-sandbox: o app roda com --no-sandbox só no teste.
+      - run: xvfb-run --auto-servernum pnpm e2e
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: playwright-report
+          path: |
+            app/playwright-report
+            app/test-results

@@ -1,0 +1,30 @@
+pre-commit:
+  parallel: true
+  commands:
+    worker-lint:
+      root: worker/
+      glob: "*.py"
+      run: uv run ruff check {staged_files} && uv run ruff format --check {staged_files}
+    app-lint:
+      root: app/
+      glob: "*.{ts,tsx}"
+      run: pnpm exec eslint --max-warnings 0 --no-warn-ignored {staged_files}
+    app-test:
+      root: app/
+      glob: "*.{ts,tsx}"
+      run: pnpm exec vitest related --run {staged_files}
+
+# Conventional Commits (o semantic-release calcula a versão a partir deles).
+commit-msg:
+  commands:
+    # Todo commit deste repositório sai com o e-mail pessoal.
+    author-email:
+      run: |
+        email=$(git config user.email)
+        if [ "$email" != "eldevanjr@gmail.com" ]; then
+          echo "E-mail de commit '$email' não permitido. Rode: git config user.email eldevanjr@gmail.com"
+          exit 1
+        fi
+    commitlint:
+      root: app/
+      run: pnpm exec commitlint --edit {1}

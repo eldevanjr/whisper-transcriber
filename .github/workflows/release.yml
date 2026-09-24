@@ -1,0 +1,216 @@
+# Release automático (spec §10.4): merge na main → semantic-release calcula a versão pelos
+# Conventional Commits, cria a tag e um release rascunho → instaladores nos 3 sistemas →
+# SHA256SUMS.txt → publica. Nos PRs para a main (e no manual com dry_run) só gera os instaladores
+# como artefatos do Actions, sem tag nem release — valida tudo antes do merge que cria a versão.
+name: Release
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Só gerar os instaladores (sem tag nem release)"
+        type: boolean
+        default: true
+      version:
+        description: "Publicar uma tag já existente (ex.: 0.1.0), sem o semantic-release"
+        type: string
+        default: ""
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  # Publica só no push na main ou no manual sem dry_run; PRs para a main são dry run.
+  PUBLISH: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && !inputs.dry_run) }}
+
+jobs:
+  version:
+    name: Versão (semantic-release)
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.release.outputs.version || steps.manual.outputs.version || steps.dry.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v6
+        with:
+          package_json_file: app/package.json
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: pnpm
+          cache-dependency-path: app/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+        working-directory: app
+      - name: Tag base existe (sem nenhuma tag a primeira versão viraria 1.0.0)
+        if: env.PUBLISH == 'true' && !inputs.version
+        run: git describe --tags --abbrev=0 --match 'v*' >/dev/null || { echo "::error::crie a tag base"; exit 1; }
+      - name: Calcular a versão, criar a tag e o release rascunho
+        id: release
+        if: env.PUBLISH == 'true' && !inputs.version
+        working-directory: app
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: pnpm exec semantic-release
+      - name: Publicar a tag informada (rascunho para os instaladores)
+        id: manual
+        if: env.PUBLISH == 'true' && inputs.version
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          gh release create "v$VERSION" --draft --verify-tag --title "v$VERSION" \
+            --notes "Instaladores da versão $VERSION." -R "$GITHUB_REPOSITORY"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+      - name: Versão de teste (dry run)
+        id: dry
+        if: env.PUBLISH != 'true'
+        # Diferente da versão do repositório (0.0.0-dev): exercita o set-version como no release.
+        run: echo "version=0.0.1-dev.1" >> "$GITHUB_OUTPUT"
+
+  whispercpp:
+    name: Motor whisper.cpp
+    needs: version
+    if: needs.version.outputs.version != ''
+    uses: ./.github/workflows/whispercpp.yml
+
+  package:
+    name: Instaladores (${{ matrix.name }})
+    needs: [version, whispercpp]
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: Linux, os: ubuntu-22.04, wheel: linux-x64, builder: --linux, device: cpu, pack: linux-unpacked/resources }
+          - { name: Windows, os: windows-latest, wheel: win32-x64, builder: --win, device: cpu, pack: win-unpacked/resources }
+          - { name: macOS, os: macos-14, wheel: darwin-arm64, builder: --mac, device: gpu, pack: mac-arm64/Whisper Transcriber.app/Contents/Resources }
+    defaults:
+      run:
+        shell: bash
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+      UV_PYTHON_PREFERENCE: only-managed # python-build-standalone (glibc 2.17)
+      GGML_TINY: https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-tiny.bin
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+      - uses: pnpm/action-setup@v6
+        with:
+          package_json_file: app/package.json
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: pnpm
+          cache-dependency-path: app/pnpm-lock.yaml
+      - uses: actions/download-artifact@v8
+        with:
+          name: pywhispercpp-${{ matrix.wheel }}
+          path: dist/whispercpp
+      - name: Loader do Vulkan (Linux; o PyInstaller embute o libvulkan.so.1)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libvulkan1
+      - name: Runtime do Vulkan (Windows; o motor whisper.cpp importa o vulkan-1.dll)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $v = "1.4.357.0"
+          Invoke-WebRequest "https://sdk.lunarg.com/sdk/download/$v/windows/vulkansdk-windows-X64-$v.exe" -OutFile vulkansdk.exe
+          Start-Process -Wait -FilePath .\vulkansdk.exe -ArgumentList "--root","C:\VulkanSDK","--accept-licenses","--default-answer","--confirm-command","install"
+      - name: Gravar a versão ${{ env.VERSION }}
+        run: node app/scripts/set-version.mjs "$VERSION"
+      - name: Empacotar o worker (PyInstaller, com o whisper.cpp de GPU)
+        run: |
+          export WHISPERCPP_WHEEL="$(ls dist/whispercpp/pywhispercpp-*.whl)"
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            pwsh -File scripts/build-worker.ps1
+          else
+            scripts/build-worker.sh
+          fi
+      - name: glibc mínima (Linux ≥ 2.35 — Ubuntu 22.04, Debian 12)
+        if: runner.os == 'Linux'
+        run: scripts/check-glibc.sh app/resources/worker 2.35
+      - uses: actions/cache@v6
+        with:
+          path: ~/.cache/huggingface
+          key: hf-smoke-tiny-${{ runner.os }}-v1
+      - name: Smoke do worker empacotado (transcreve nos dois motores, sem Python no PATH)
+        working-directory: app/resources/worker
+        run: |
+          wav=../../../worker/transcriber_worker/assets/self_test.wav
+          ggml="$HOME/.cache/huggingface/ggml-tiny.bin"
+          [ -s "$ggml" ] || curl -fsSL "$GGML_TINY" -o "$ggml" --create-dirs
+          ./transcriber-worker cli "$wav" --model tiny --language en --output-dir "$RUNNER_TEMP/fw"
+          test -s "$RUNNER_TEMP/fw/transcricao-self_test.json"
+          ./transcriber-worker cli "$wav" --engine whisper-cpp --device ${{ matrix.device }} \
+            --model "$ggml" --language en --output-dir "$RUNNER_TEMP/cpp"
+          test -s "$RUNNER_TEMP/cpp/transcricao-self_test.json"
+      - run: pnpm install --frozen-lockfile
+        working-directory: app
+      - run: pnpm build
+        working-directory: app
+      - name: Instaladores
+        working-directory: app
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Assinatura só com os secrets configurados (spec §10.6); sem eles o macOS sai com
+          # assinatura ad-hoc (exigida no Apple Silicon) e o Windows sem assinatura.
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          args=(${{ matrix.builder }} --publish "$([ "$PUBLISH" = true ] && echo always || echo never)")
+          if [ "$RUNNER_OS" = macOS ] && [ -z "$CSC_LINK" ]; then args+=(-c.mac.identity=-); fi
+          pnpm exec electron-builder "${args[@]}"
+      - name: Smoke do worker dentro do pacote (depois da assinatura)
+        working-directory: app/dist/${{ matrix.pack }}/worker
+        run: |
+          out=$(./transcriber-worker </dev/null 2>/dev/null | head -1 || true)
+          echo "$out"
+          echo "$out" | grep -q "\"version\":\"$VERSION\""
+      - uses: actions/upload-artifact@v7
+        with:
+          name: instaladores-${{ matrix.wheel }}
+          path: |
+            app/dist/*.exe
+            app/dist/*.dmg
+            app/dist/*.zip
+            app/dist/*.AppImage
+            app/dist/*.deb
+            app/dist/latest*.yml
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    name: Publicar (SHA256SUMS)
+    needs: [version, package]
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && !inputs.dry_run)
+    runs-on: ubuntu-latest
+    env:
+      TAG: v${{ needs.version.outputs.version }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Baixar os instaladores do rascunho
+        run: gh release download "$TAG" -R "$GITHUB_REPOSITORY" -D assets
+      - name: SHA256SUMS.txt
+        working-directory: assets
+        run: |
+          sha256sum $(ls | grep -vE '\.(yml|blockmap)$') > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+      - name: Enviar e publicar o release
+        run: |
+          gh release upload "$TAG" assets/SHA256SUMS.txt -R "$GITHUB_REPOSITORY" --clobber
+          gh release edit "$TAG" -R "$GITHUB_REPOSITORY" --draft=false --latest

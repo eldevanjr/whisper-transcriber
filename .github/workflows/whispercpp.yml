@@ -1,0 +1,84 @@
+# Compila o motor whisper.cpp (pywhispercpp) com GPU em cada sistema e testa transcrevendo.
+# Chamado pelo workflow de release (PRs e pushes da main) e sob demanda.
+name: Motor whisper.cpp (GPU)
+
+on:
+  # Compilar nos 3 sistemas é caro: só pelo release (workflow_call — que roda nos PRs e pushes da
+  # main) e sob demanda. Os PRs para a develop não compilam.
+  workflow_call:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: "Linux x64 (Vulkan)", os: ubuntu-22.04, device: cpu, artifact: linux-x64 }
+          - { name: "Windows x64 (Vulkan)", os: windows-latest, device: cpu, artifact: win32-x64 }
+          # Runners macOS-14 são Apple Silicon com GPU: dá para testar o Metal de verdade.
+          - { name: "macOS arm64 (Metal)", os: macos-14, device: gpu, artifact: darwin-arm64 }
+    defaults:
+      run:
+        shell: bash
+    env:
+      # Python do python-build-standalone (glibc 2.17), não o do sistema do runner.
+      UV_PYTHON_PREFERENCE: only-managed
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+      # Ubuntu 22.04 (glibc 2.35): o binário roda também em Debian 12 e Mint 21. O SDK da LunarG
+      # traz glslc e SPIRV-Headers novos (o apt do 22.04 é antigo demais para o ggml-vulkan).
+      - name: Vulkan SDK (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          v=1.4.357.0
+          sudo apt-get update && sudo apt-get install -y libvulkan1
+          curl -fsSL "https://sdk.lunarg.com/sdk/download/$v/linux/vulkansdk-linux-x86_64-$v.tar.xz" \
+            | tar -xJ -C "$RUNNER_TEMP"
+          echo "VULKAN_SDK=$RUNNER_TEMP/$v/x86_64" >> "$GITHUB_ENV"
+          sdk="$RUNNER_TEMP/$v/x86_64"
+          echo "EXTRA_CMAKE_ARGS=-DCMAKE_PREFIX_PATH=$sdk -DVulkan_LIBRARY=/usr/lib/x86_64-linux-gnu/libvulkan.so.1" >> "$GITHUB_ENV"
+      - name: Vulkan SDK (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $v = "1.4.357.0"
+          Invoke-WebRequest "https://sdk.lunarg.com/sdk/download/$v/windows/vulkansdk-windows-X64-$v.exe" -OutFile vulkansdk.exe
+          Start-Process -Wait -FilePath .\vulkansdk.exe -ArgumentList "--root","C:\VulkanSDK","--accept-licenses","--default-answer","--confirm-command","install"
+          "VULKAN_SDK=C:\VulkanSDK" | Out-File -FilePath $env:GITHUB_ENV -Append
+      - run: uv sync --locked
+        working-directory: worker
+      - name: Compilar (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: scripts/build-whispercpp.sh dist/whispercpp
+      - name: Compilar (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: scripts/build-whispercpp.ps1 -Out dist/whispercpp
+      - name: Instalar o wheel compilado no worker
+        working-directory: worker
+        run: uv pip install --reinstall-package pywhispercpp ../dist/whispercpp/pywhispercpp-*.whl
+      - uses: actions/cache@v6
+        with:
+          path: ~/.cache/huggingface
+          key: hf-ggml-tiny-${{ runner.os }}-v1
+      - name: Transcrever com o modelo tiny
+        working-directory: worker
+        run: |
+          INFO=$(uv run --no-sync python -c "import _pywhispercpp as pw; print(pw.whisper_print_system_info())")
+          echo "$INFO"
+          # Binário portátil: nada herdado da CPU do runner (AVX-512; i8mm do M2+), senão SIGILL.
+          if echo "$INFO" | grep -qE 'AVX512|MATMUL_INT8'; then echo "::error::wheel não portátil"; exit 1; fi
+          MODEL=$(uv run --no-sync python -c "from huggingface_hub import hf_hub_download as d; print(d('ggerganov/whisper.cpp', 'ggml-tiny.bin'))")
+          uv run --no-sync transcriber-worker cli transcriber_worker/assets/self_test.wav \
+            --engine whisper-cpp --device ${{ matrix.device }} --model "$MODEL" --language en --output-dir out
+          test -s out/transcricao-self_test.json
+      - uses: actions/upload-artifact@v7
+        with:
+          name: pywhispercpp-${{ matrix.artifact }}
+          path: dist/whispercpp/*.whl

@@ -1,0 +1,298 @@
+{
+  "app": {
+    "name": "Whisper Transcriber",
+    "loading": "Carregando…"
+  },
+  "common": {
+    "back": "Voltar",
+    "cancel": "Cancelar",
+    "close": "Fechar",
+    "continue": "Continuar",
+    "copy": "Copiar",
+    "copied": "✓ Copiado",
+    "download": "Baixar",
+    "remove": "Remover",
+    "retry": "Tentar de novo",
+    "search": "Buscar",
+    "dismiss": "Dispensar aviso"
+  },
+  "errors": {
+    "INVALID_MESSAGE": "O motor recebeu um pedido inválido.",
+    "MODEL_NOT_LOADED": "Escolha um modelo antes de transcrever.",
+    "MODEL_LOAD_FAILED": "Não foi possível carregar o modelo. Tente baixá-lo de novo.",
+    "OUT_OF_MEMORY": "A memória acabou durante a transcrição. Um modelo menor deve resolver.",
+    "CUDA_UNAVAILABLE": "A GPU NVIDIA não está disponível. A transcrição seguiu na CPU.",
+    "CUDA_FAILED": "A GPU NVIDIA falhou. A transcrição seguiu na CPU.",
+    "INVALID_MEDIA": "Não foi possível ler este arquivo.",
+    "NO_AUDIO": "Este vídeo não tem áudio.",
+    "FILE_NOT_FOUND": "O arquivo não está mais no lugar original.",
+    "DISK_FULL": "O disco está cheio.",
+    "INTERNAL": "Algo deu errado.",
+    "WORKER_CRASHED": "O motor de transcrição parou inesperadamente.",
+    "WORKER_UNAVAILABLE": "O motor de transcrição não conseguiu iniciar.",
+    "WORKER_TIMEOUT": "O motor de transcrição parou de responder.",
+    "PROTOCOL_MISMATCH": "O motor não é compatível com esta versão do app. Reinstale o app.",
+    "CANCELED": "Transcrição cancelada.",
+    "UNSUPPORTED_FILE": "Formato de arquivo não suportado.",
+    "DOWNLOAD_FAILED": "O download falhou. Verifique a internet e tente de novo.",
+    "HASH_MISMATCH": "O arquivo baixado veio corrompido e foi descartado. Tente de novo.",
+    "INSUFFICIENT_SPACE": "Não há espaço livre suficiente no disco.",
+    "HOST_NOT_ALLOWED": "O download foi bloqueado por segurança.",
+    "INVALID_REQUEST": "Não foi possível fazer isso agora.",
+    "NOT_FOUND": "Item não encontrado.",
+    "details": "Detalhes técnicos",
+    "copyDiagnostic": "Copiar diagnóstico",
+    "actions": {
+      "smallerModel": "Usar um modelo menor",
+      "reinstallCuda": "Reinstalar CUDA",
+      "storage": "Abrir Armazenamento",
+      "downloadModel": "Baixar o modelo de novo"
+    },
+    "report": "Relatar problema",
+    "GPU_FAILED": "A GPU falhou. A transcrição seguiu na CPU."
+  },
+  "notices": {
+    "cudaFallback": "A GPU falhou; esta transcrição seguiu na CPU.",
+    "rejected": "Não suportado ou não encontrado: {{names}}"
+  },
+  "banners": {
+    "update": "Nova versão {{version}} disponível.",
+    "updateLink": "Baixar",
+    "updateDownloading": "Baixando a versão {{version}}…",
+    "updateReady": "A versão {{version}} está pronta.",
+    "restart": "Reiniciar para atualizar",
+    "recovered": "As configurações estavam corrompidas e voltaram ao padrão. Uma cópia foi salva como settings.bak.json."
+  },
+  "dialog": {
+    "confirm": "Confirmar"
+  },
+  "onboarding": {
+    "welcome": {
+      "title": "Bem-vindo ao Whisper Transcriber",
+      "subtitle": "Transcreva vídeos e áudios no seu computador, sem enviar nada para a internet.",
+      "language": "Idioma da interface"
+    },
+    "steps": "Passo {{current}} de {{total}}",
+    "model": {
+      "title": "Escolha o modelo de transcrição",
+      "subtitle": "Você pode trocar depois nas configurações.",
+      "recommended": "Recomendado",
+      "speed": "Velocidade",
+      "accuracy": "Precisão",
+      "gpu": "Usar a GPU NVIDIA ({{gpu}})",
+      "gpuHint": "Transcreve bem mais rápido. Baixa mais {{size}} de bibliotecas da NVIDIA.",
+      "terms": "Li e aceito os termos de licença da NVIDIA",
+      "termsLink": "Ler os termos",
+      "start": "Baixar e continuar",
+      "gpuAccel": "Usar a GPU ({{gpu}})",
+      "gpuAccelHint": "Transcreve mais rápido usando a placa de vídeo ({{api}}). Sem downloads extras de bibliotecas."
+    },
+    "download": {
+      "title": "Preparando tudo",
+      "ring": "Progresso do download",
+      "bytes": "{{received}} de {{total}}",
+      "speed": "{{speed}}/s · faltam {{eta}}",
+      "stepModel": "Modelo {{model}}",
+      "stepCuda": "Bibliotecas da GPU NVIDIA",
+      "stepTest": "Teste rápido do motor",
+      "status": {
+        "pending": "aguardando",
+        "active": "em andamento",
+        "done": "✓ verificado",
+        "failed": "falhou"
+      },
+      "resume": "Se a internet cair, o download continua de onde parou.",
+      "tip": "Dica: depois é só arrastar vídeos ou áudios para a janela.",
+      "start": "Começar",
+      "back": "Escolher outro modelo",
+      "useCpu": "Continuar na CPU"
+    }
+  },
+  "main": {
+    "add": "Adicionar",
+    "queue": "Fila ({{count}})",
+    "history": "Histórico",
+    "historyEmpty": "Nada por aqui ainda.",
+    "sidebar": "Fila e histórico",
+    "removeFromQueue": "Remover da fila",
+    "retry": "Transcrever de novo",
+    "delete": "Excluir",
+    "deleteTitle": "Excluir do histórico?",
+    "deleteMessage": "\"{{name}}\" será apagado do histórico. O arquivo original não é afetado.",
+    "corrupted": "Não foi possível abrir",
+    "locate": "Localizar arquivo",
+    "status": {
+      "queued": "Na fila",
+      "processing": "Transcrevendo",
+      "done": "Concluído",
+      "failed": "Falhou",
+      "canceled": "Cancelado",
+      "interrupted": "Interrompido"
+    },
+    "empty": {
+      "title": "Solte vídeos ou áudios aqui",
+      "choose": "Escolher vídeo ou áudio",
+      "formats": "Vídeo: {{video}} · Áudio: {{audio}}"
+    },
+    "drop": "Solte para transcrever",
+    "settings": "Configurações",
+    "cancel": "Cancelar transcrição",
+    "cancelTitle": "Cancelar a transcrição?",
+    "cancelMessage": "O que já foi transcrito deste arquivo será descartado.",
+    "keep": "Continuar transcrevendo",
+    "phase": {
+      "waiting": "Preparando",
+      "loading_model": "Carregando o modelo",
+      "extracting_audio": "Extraindo o áudio",
+      "transcribing": "Transcrevendo"
+    },
+    "progress": "Progresso da transcrição",
+    "progressExtract": "Progresso da extração do áudio",
+    "progressTimes": "{{processed}} de {{total}}",
+    "remaining": "faltam {{time}}",
+    "player": {
+      "videoMissing": "Vídeo original não encontrado ou não suportado; tocando o áudio salvo.",
+      "unavailable": "A mídia ainda não está disponível.",
+      "label": "Reprodutor de {{name}}"
+    },
+    "languageAuto": "idioma automático",
+    "chat": {
+      "title": "Trechos",
+      "typing": "Transcrevendo…",
+      "empty": "Os trechos aparecem aqui enquanto a transcrição anda.",
+      "seek": "Ir para {{time}}"
+    },
+    "selectPrompt": "Selecione um item na barra lateral."
+  },
+  "result": {
+    "title": "Transcrição",
+    "tabs": "Formato da transcrição",
+    "segments": "Trechos",
+    "text": "Texto",
+    "timed": "Com tempos",
+    "json": "JSON",
+    "empty": "Nenhuma fala foi reconhecida neste arquivo.",
+    "emptyHint": "Se o arquivo tem fala, tente de novo com um modelo maior ou com o idioma fixo (Configurações → Transcrição).",
+    "saved": "Arquivo salvo."
+  },
+  "settings": {
+    "title": "Configurações",
+    "nav": "Seções das configurações",
+    "sections": {
+      "general": "Geral",
+      "transcription": "Transcrição",
+      "storage": "Armazenamento",
+      "help": "Ajuda",
+      "about": "Sobre",
+      "licenses": "Licenças"
+    },
+    "general": {
+      "language": "Idioma da interface",
+      "languageSystem": "Mesmo do sistema",
+      "theme": "Tema",
+      "themes": {
+        "system": "Sistema",
+        "light": "Claro",
+        "dark": "Escuro"
+      },
+      "updates": "Verificar novas versões",
+      "updatesHint": "Avisa quando sair uma versão nova."
+    },
+    "models": {
+      "title": "Modelo",
+      "hint": "Durante um download, a fila continua com o modelo atual.",
+      "inUse": "✓ Em uso",
+      "use": "Usar",
+      "download": "Baixar",
+      "remove": "Remover",
+      "cancel": "Cancelar download",
+      "progress": "Download de {{model}}",
+      "removeTitle": "Remover o modelo {{model}}?",
+      "removeMessage": "Libera {{size}}. Você pode baixar de novo quando quiser."
+    },
+    "audioLanguage": {
+      "title": "Idioma do áudio",
+      "auto": "Detectar automaticamente",
+      "hint": "Fixar o idioma deixa a transcrição mais precisa. Vale a partir do próximo arquivo."
+    },
+    "processing": {
+      "title": "Processamento",
+      "cpu": "CPU",
+      "cpuHint": "Funciona em qualquer computador.",
+      "gpu": "GPU NVIDIA (CUDA)",
+      "gpuHint": "Bem mais rápido em placas NVIDIA. Precisa das bibliotecas da NVIDIA ({{size}}).",
+      "installed": "Bibliotecas da NVIDIA instaladas.",
+      "notInstalled": "Bibliotecas da NVIDIA não instaladas.",
+      "install": "Baixar bibliotecas",
+      "reinstall": "Reinstalar CUDA",
+      "remove": "Remover bibliotecas",
+      "progress": "Download das bibliotecas da NVIDIA",
+      "gpuAccel": "GPU ({{gpu}})",
+      "gpuAccelHint": "Mais rápido usando a placa de vídeo ({{api}}). Usa o modelo no formato do whisper.cpp ({{size}}).",
+      "gpuAccelProgress": "Download do modelo para a GPU",
+      "cpuModelProgress": "Download do modelo para a CPU"
+    },
+    "storage": {
+      "models": "Modelos",
+      "cuda": "Bibliotecas da GPU",
+      "history": "Histórico ({{count}} transcrições)",
+      "openFolder": "Abrir pasta",
+      "clear": "Limpar histórico…",
+      "clearTitle": "Limpar o histórico?",
+      "clearMessage": "Apagar {{count}} transcrições e {{size}}. Não pode ser desfeito. Os originais não são afetados.",
+      "clearConfirm": "Apagar tudo",
+      "cleared": "Histórico apagado."
+    },
+    "help": {
+      "search": "Buscar na ajuda",
+      "noResults": "Nada encontrado.",
+      "report": "Encontrou um problema? Relate no GitHub."
+    },
+    "about": {
+      "version": "Versão {{version}}",
+      "madeBy": "Desenvolvido por",
+      "license": "Software livre sob a licença Apache 2.0: use, modifique e distribua sem custo.",
+      "licenses": "Licenças de terceiros",
+      "disclaimer": "Usa os modelos Whisper (OpenAI) via faster-whisper. Projeto independente, sem vínculo com a OpenAI."
+    },
+    "licenses": {
+      "search": "Buscar biblioteca ou licença",
+      "count": "{{count}} componentes",
+      "backToList": "Voltar à lista",
+      "openPage": "Abrir página do projeto"
+    }
+  },
+  "help": {
+    "quickStart": {
+      "title": "Guia rápido",
+      "body": "Arraste vídeos ou áudios para a janela, ou clique em \"Adicionar\". Os arquivos entram na fila e são transcritos um por vez.\nOs trechos aparecem ao lado enquanto a transcrição anda. Clique num trecho para ouvir aquele momento.\nNo fim, escolha a aba Texto, Com tempos ou JSON e use Copiar ou Baixar."
+    },
+    "whichModel": {
+      "title": "Qual modelo escolher?",
+      "body": "Small: o mais rápido e leve; bom para computadores com pouca memória.\nMedium: equilíbrio entre velocidade e precisão; o padrão.\nLarge v3 Turbo: quase a precisão do Large v3, bem mais rápido; ótimo com GPU NVIDIA.\nLarge v3: o mais preciso e o mais lento."
+    },
+    "gpu": {
+      "title": "Aceleração por GPU",
+      "body": "Placas NVIDIA (Windows e Linux): usam o CUDA. Ative em Configurações → Transcrição → Processamento; o app baixa as bibliotecas da NVIDIA (cerca de 1,2 GB) depois que você aceita os termos. Precisa de driver 525 ou mais novo.\nPlacas AMD e Intel (Windows e Linux) e Macs com Apple Silicon: usam o motor whisper.cpp pela GPU (Vulkan ou Metal). O app baixa o modelo no formato certo; não há bibliotecas extras. No Linux, é preciso o driver Vulkan (ex.: sudo apt install mesa-vulkan-drivers).\nSe a GPU falhar, a transcrição continua na CPU automaticamente. Se nenhuma placa compatível for encontrada, o app avisa e usa a CPU."
+    },
+    "unsigned": {
+      "title": "Abrir o app pela primeira vez",
+      "body": "O app ainda não tem assinatura digital, então o sistema pode avisar na primeira abertura.\nWindows: na tela \"O Windows protegeu o computador\", clique em \"Mais informações\" e depois em \"Executar assim mesmo\".\nmacOS: clique com o botão direito no app, escolha \"Abrir\" e confirme. Se não aparecer a opção, vá em Ajustes do Sistema → Privacidade e Segurança → \"Abrir Mesmo Assim\"."
+    },
+    "problems": {
+      "title": "Problemas comuns",
+      "body": "Transcrição lenta: use um modelo menor ou ative a GPU NVIDIA.\n\"A memória acabou\": troque para um modelo menor em Configurações → Transcrição.\n\"Não foi possível ler este arquivo\": o arquivo pode estar corrompido ou num formato não suportado; tente convertê-lo para MP3 ou MP4.\n\"O arquivo não está mais no lugar original\": use \"Localizar arquivo\" no item do histórico.\nDisco cheio: veja o espaço usado em Configurações → Armazenamento."
+    },
+    "privacy": {
+      "title": "Privacidade",
+      "body": "Tudo é processado no seu computador. Os áudios e as transcrições não são enviados para nenhum servidor.\nO app só acessa a internet para baixar os modelos, as bibliotecas da NVIDIA e verificar se há versão nova (isso pode ser desligado em Geral)."
+    }
+  },
+  "gpu": {
+    "unavailable": {
+      "title": "Aceleração por GPU não disponível",
+      "noGpu": "Não encontramos uma placa de vídeo compatível neste computador. A transcrição usa o processador (CPU): funciona normalmente, só é mais lenta.",
+      "unsupported": "Este sistema não suporta a aceleração por GPU. A transcrição usa o processador (CPU): funciona normalmente, só é mais lenta."
+    }
+  }
+}

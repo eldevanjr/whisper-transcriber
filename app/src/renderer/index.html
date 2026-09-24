@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; media-src app-media:; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'"
+    />
+    <title>Whisper Transcriber</title>
+    <!--
+      Tela de carregamento: pinta antes de qualquer JavaScript. O React repete a mesma marcação
+      (BootSplash) até o estado do main chegar, então a troca não pisca.
+    -->
+    <style>
+      html,
+      body,
+      #root {
+        height: 100%;
+        margin: 0;
+      }
+      .boot {
+        --boot-bg: #eef2f7;
+        --boot-muted: #4a5568;
+        --boot-glow: rgba(37, 99, 235, 0.22);
+        --boot-track: #d5dde8;
+        position: relative;
+        display: grid;
+        place-items: center;
+        height: 100%;
+        overflow: hidden;
+        background: var(--boot-bg);
+        font-family:
+          'Inter Variable',
+          Inter,
+          system-ui,
+          -apple-system,
+          'Segoe UI',
+          sans-serif;
+      }
+      @media (prefers-color-scheme: dark) {
+        .boot {
+          --boot-bg: #0a0a0b;
+          --boot-muted: #a7b0be;
+          --boot-glow: rgba(96, 165, 250, 0.2);
+          --boot-track: #20242b;
+        }
+      }
+      .boot::before {
+        content: '';
+        position: absolute;
+        width: 520px;
+        height: 520px;
+        border-radius: 50%;
+        background: radial-gradient(circle, var(--boot-glow) 0%, transparent 65%);
+        animation: boot-breathe 3.2s ease-in-out infinite;
+      }
+      .boot-card {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 22px;
+        animation: boot-rise 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+      }
+      .boot-logo {
+        width: 112px;
+        height: 112px;
+        filter: drop-shadow(0 18px 36px rgba(29, 78, 216, 0.35));
+      }
+      .boot-bar {
+        transform-box: fill-box;
+        transform-origin: center;
+        animation: boot-eq 1.1s ease-in-out infinite;
+      }
+      .boot-bar:nth-child(2) {
+        animation-delay: -0.9s;
+      }
+      .boot-bar:nth-child(3) {
+        animation-delay: -0.7s;
+      }
+      .boot-bar:nth-child(4) {
+        animation-delay: -0.5s;
+      }
+      .boot-bar:nth-child(5) {
+        animation-delay: -0.3s;
+      }
+      .boot-name {
+        margin: 0;
+        font-size: 28px;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        background: linear-gradient(90deg, #1d4ed8, #3b82f6 60%, #60a5fa);
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+      }
+      .boot-progress {
+        position: relative;
+        width: 180px;
+        height: 4px;
+        border-radius: 999px;
+        overflow: hidden;
+        background: var(--boot-track);
+      }
+      .boot-progress::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        width: 40%;
+        border-radius: inherit;
+        background: linear-gradient(90deg, #1d4ed8, #3b82f6 60%, #60a5fa);
+        animation: boot-slide 1.4s ease-in-out infinite;
+      }
+      .boot-status {
+        margin: -8px 0 0;
+        font-size: 13px;
+        color: var(--boot-muted);
+      }
+      @keyframes boot-eq {
+        0%,
+        100% {
+          transform: scaleY(0.45);
+        }
+        50% {
+          transform: scaleY(1);
+        }
+      }
+      @keyframes boot-breathe {
+        0%,
+        100% {
+          transform: scale(0.92);
+          opacity: 0.75;
+        }
+        50% {
+          transform: scale(1.06);
+          opacity: 1;
+        }
+      }
+      @keyframes boot-slide {
+        from {
+          transform: translateX(-110%);
+        }
+        to {
+          transform: translateX(260%);
+        }
+      }
+      @keyframes boot-rise {
+        from {
+          opacity: 0;
+          transform: translateY(8px);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .boot::before,
+        .boot-card,
+        .boot-bar,
+        .boot-progress::after {
+          animation: none;
+        }
+        .boot-progress::after {
+          width: 100%;
+          opacity: 0.6;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root">
+      <div class="boot" role="status">
+        <div class="boot-card">
+          <svg class="boot-logo" viewBox="0 0 48 50" aria-hidden="true">
+            <defs>
+              <linearGradient id="boot-gradient" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stop-color="#1D4ED8" />
+                <stop offset="100%" stop-color="#60A5FA" />
+              </linearGradient>
+            </defs>
+            <path
+              d="M14 2 H34 A12 12 0 0 1 46 14 V30 A12 12 0 0 1 34 42 H24 L14 49 V42 A12 12 0 0 1 2 30 V14 A12 12 0 0 1 14 2 Z"
+              fill="url(#boot-gradient)"
+            />
+            <g stroke="#FFFFFF" stroke-width="3" stroke-linecap="round">
+              <line class="boot-bar" x1="13" y1="19" x2="13" y2="25" />
+              <line class="boot-bar" x1="19" y1="14" x2="19" y2="30" />
+              <line class="boot-bar" x1="25" y1="10" x2="25" y2="34" />
+              <line class="boot-bar" x1="31" y1="15" x2="31" y2="29" />
+              <line class="boot-bar" x1="37" y1="19" x2="37" y2="25" />
+            </g>
+          </svg>
+          <p class="boot-name">Whisper Transcriber</p>
+          <div class="boot-progress"></div>
+        </div>
+      </div>
+    </div>
+    <script type="module" src="./src/main.tsx"></script>
+  </body>
+</html>

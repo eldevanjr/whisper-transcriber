@@ -1,0 +1,44 @@
+# Dependências e builds
+node_modules/
+dist/
+out/
+release/
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+coverage/
+.coverage
+htmlcov/
+build/
+!app/build/
+
+# Worker empacotado (gerado no build)
+app/resources/worker/
+
+# Dados locais do usuário (nunca versionar)
+output/
+videos/
+*.wav
+*.mp4
+*.m4a
+
+# Fixtures de teste pequenas são versionadas
+!**/tests/fixtures/**
+!**/e2e/fixtures/**
+!worker/transcriber_worker/assets/**
+
+# Ferramentas
+.superpowers/
+.DS_Store
+.idea/
+.vscode/
+.tools/
+
+# Documentos do superpowers (specs e planos) ficam só localmente
+docs/superpowers/
+# Playwright
+app/test-results/
+app/playwright-report/

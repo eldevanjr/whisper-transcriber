@@ -1,0 +1,67 @@
+# Instaladores (spec §10). Versão: gravada pelo CI (scripts/set-version.mjs) antes do build.
+appId: io.github.eldevanjr.whispertranscriber
+productName: Whisper Transcriber
+copyright: Copyright 2026 Eldevan Nery Junior
+directories:
+  output: dist
+  buildResources: build
+files:
+  - out/**
+  - resources/icon.png
+  - package.json
+  - '!**/*.map'
+# Ícone da janela lido em tempo de execução (import ?asset do electron-vite).
+asarUnpack:
+  - resources/icon.png
+extraResources:
+  # Worker PyInstaller (scripts/build-worker.*) → process.resourcesPath/worker
+  - from: resources/worker
+    to: worker
+  - from: ../LICENSE
+    to: LICENSE
+  - from: ../NOTICE
+    to: NOTICE
+electronFuses:
+  runAsNode: false
+  enableCookieEncryption: true
+  enableNodeOptionsEnvironmentVariable: false
+  enableNodeCliInspectArguments: false
+  enableEmbeddedAsarIntegrityValidation: true
+  onlyLoadAppFromAsar: true
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  artifactName: Whisper-Transcriber-${version}-windows-x64.${ext}
+nsis:
+  oneClick: false
+  perMachine: false
+  allowElevation: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  license: ../LICENSE
+mac:
+  target:
+    - target: dmg
+      arch: [arm64]
+    # O electron-updater no macOS precisa do .zip (quando houver assinatura).
+    - target: zip
+      arch: [arm64]
+  category: public.app-category.productivity
+  minimumSystemVersion: '14.0'
+  artifactName: Whisper-Transcriber-${version}-macos-arm64.${ext}
+linux:
+  target:
+    - target: AppImage
+      arch: [x64]
+    - target: deb
+      arch: [x64]
+  category: AudioVideo
+  synopsis: Transcreva vídeos e áudios localmente com Whisper
+  maintainer: Eldevan Nery Junior
+  artifactName: Whisper-Transcriber-${version}-linux-x64.${ext}
+publish:
+  provider: github
+  owner: eldevanjr
+  repo: whisper-transcriber
+  releaseType: draft

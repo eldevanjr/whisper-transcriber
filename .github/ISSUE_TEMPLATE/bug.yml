@@ -1,0 +1,31 @@
+name: Relatar problema
+description: Algo não funcionou como esperado no Whisper Transcriber
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Obrigado por relatar! Use o botão **Relatar problema** no aviso de erro do app:
+        ele já preenche o diagnóstico (sem caminhos pessoais).
+  - type: textarea
+    id: what
+    attributes:
+      label: O que você estava fazendo?
+      description: Passos para reproduzir, tipo de arquivo (vídeo/áudio, formato, duração).
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostic
+    attributes:
+      label: Diagnóstico
+      description: Cole aqui o texto de "Copiar diagnóstico".
+      render: text
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Sistema
+      options: [Windows, macOS, Linux]
+    validations:
+      required: true

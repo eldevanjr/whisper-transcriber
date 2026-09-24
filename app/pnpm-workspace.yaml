@@ -1,0 +1,12 @@
+allowBuilds:
+  electron: true
+  esbuild: true
+  lefthook: true
+  electron-winstaller: false
+  msw: false
+# O gerador de notas do semantic-release procura o preset primeiro no node_modules "içado" do pnpm,
+# onde ficaria o preset 10 (do commitlint), que exige o conventional-changelog-writer 9. Fora do
+# içamento, ele usa o preset 9 declarado no app (compatível com o writer 8 que ele traz).
+hoistPattern:
+  - '*'
+  - '!conventional-changelog-conventionalcommits'

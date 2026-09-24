@@ -1,0 +1,68 @@
+[project]
+name = "transcriber-worker"
+version = "0.0.0.dev0"
+description = "Motor de transcrição do Whisper Transcriber (faster-whisper e whisper.cpp)"
+license = "Apache-2.0"
+authors = [{ name = "Eldevan Nery Junior" }]
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "faster-whisper==1.2.1",
+  # No build de release é trocado pelo wheel compilado com Vulkan/Metal (scripts/build-whispercpp).
+  "pywhispercpp==1.5.1",
+  "pydantic>=2.9,<3",
+]
+
+[project.scripts]
+transcriber-worker = "transcriber_worker.__main__:main"
+
+[dependency-groups]
+dev = [
+  "pytest>=8.3",
+  "pytest-cov>=6.0",
+  "pytest-mock>=3.14",
+  "pytest-xdist>=3.6",
+  "pytest-timeout>=2.3",
+  "ruff>=0.8",
+  "mypy>=1.13",
+  "pip-audit>=2.7",
+]
+# Empacotamento do worker (scripts/build-worker.*): executável onedir que o app distribui.
+build = ["pyinstaller>=6.11"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["transcriber_worker"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "S", "C90", "SIM", "RUF", "PT"]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 9
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "S108"]
+
+[tool.mypy]
+strict = true
+plugins = ["pydantic.mypy"]
+# build/: saída do PyInstaller (scripts/build-worker.*)
+exclude = ["^build/"]
+
+[[tool.mypy.overrides]]
+module = ["faster_whisper.*", "ctranslate2.*", "huggingface_hub.*", "pywhispercpp.*", "_pywhispercpp"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-n auto --timeout=30 --cov=transcriber_worker --cov-branch --cov-report=term-missing --cov-fail-under=100 -m 'not integration'"
+markers = ["integration: usa o modelo real (lento; precisa de rede na primeira vez)"]
+
+[tool.coverage.report]
+exclude_also = ['if __name__ == "__main__":']

@@ -1,0 +1,10 @@
+out
+dist
+release
+coverage
+node_modules
+pnpm-lock.yaml
+resources/downloads-manifest.json
+test-results
+playwright-report
+resources/worker/
