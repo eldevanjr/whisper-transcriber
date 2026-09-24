@@ -19,6 +19,10 @@ on:
         description: "Publicar uma tag já existente (ex.: 0.1.0), sem o semantic-release"
         type: string
         default: ""
+      platforms:
+        description: "Plataformas (linux,windows,macos) — ex.: só macos para refazer um instalador"
+        type: string
+        default: linux,windows,macos
 
 permissions:
   contents: write
@@ -77,23 +81,41 @@ jobs:
         # Diferente da versão do repositório (0.0.0-dev): exercita o set-version como no release.
         run: echo "version=0.0.1-dev.1" >> "$GITHUB_OUTPUT"
 
+  matrix:
+    name: Plataformas
+    runs-on: ubuntu-latest
+    outputs:
+      include: ${{ steps.pick.outputs.include }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: .github/platforms.json
+          sparse-checkout-cone-mode: false
+      - id: pick
+        env:
+          PLATFORMS: ${{ inputs.platforms || 'linux,windows,macos' }}
+        run: |
+          include=$(jq -c --arg p "$PLATFORMS" \
+            '[.[] | select(.platform as $x | $p | split(",") | index($x))]' .github/platforms.json)
+          [ "$include" != "[]" ] || { echo "::error::nenhuma plataforma em '$PLATFORMS'"; exit 1; }
+          echo "include=$include" >> "$GITHUB_OUTPUT"
+
   whispercpp:
     name: Motor whisper.cpp
     needs: version
     if: needs.version.outputs.version != ''
     uses: ./.github/workflows/whispercpp.yml
+    with:
+      platforms: ${{ inputs.platforms || 'linux,windows,macos' }}
 
   package:
     name: Instaladores (${{ matrix.name }})
-    needs: [version, whispercpp]
+    needs: [version, matrix, whispercpp]
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - { name: Linux, os: ubuntu-22.04, wheel: linux-x64, builder: --linux, device: cpu, pack: linux-unpacked/resources }
-          - { name: Windows, os: windows-latest, wheel: win32-x64, builder: --win, device: cpu, pack: win-unpacked/resources }
-          - { name: macOS, os: macos-14, wheel: darwin-arm64, builder: --mac, device: gpu, pack: mac-arm64/Whisper Transcriber.app/Contents/Resources }
+        include: ${{ fromJSON(needs.matrix.outputs.include) }}
     defaults:
       run:
         shell: bash
@@ -116,7 +138,7 @@ jobs:
           cache-dependency-path: app/pnpm-lock.yaml
       - uses: actions/download-artifact@v8
         with:
-          name: pywhispercpp-${{ matrix.wheel }}
+          name: pywhispercpp-${{ matrix.artifact }}
           path: dist/whispercpp
       - name: Loader do Vulkan (Linux; o PyInstaller embute o libvulkan.so.1)
         if: runner.os == 'Linux'
@@ -172,6 +194,11 @@ jobs:
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
+          # Secret ausente chega como texto vazio: o electron-builder do macOS trataria CSC_LINK=""
+          # como um certificado (e falha com "not a file"). Vazias, as variáveis saem do ambiente.
+          for v in CSC_LINK CSC_KEY_PASSWORD APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID; do
+            [ -n "${!v}" ] || unset "$v"
+          done
           args=(${{ matrix.builder }} --publish "$([ "$PUBLISH" = true ] && echo always || echo never)")
           if [ "$RUNNER_OS" = macOS ] && [ -z "$CSC_LINK" ]; then args+=(-c.mac.identity=-); fi
           pnpm exec electron-builder "${args[@]}"
@@ -183,7 +210,7 @@ jobs:
           echo "$out" | grep -q "\"version\":\"$VERSION\""
       - uses: actions/upload-artifact@v7
         with:
-          name: instaladores-${{ matrix.wheel }}
+          name: instaladores-${{ matrix.artifact }}
           path: |
             app/dist/*.exe
             app/dist/*.dmg

@@ -6,20 +6,47 @@ on:
   # Compilar nos 3 sistemas é caro: só pelo release (workflow_call — que roda nos PRs e pushes da
   # main) e sob demanda. Os PRs para a develop não compilam.
   workflow_call:
+    inputs:
+      platforms:
+        description: "Plataformas (linux,windows,macos)"
+        type: string
+        default: linux,windows,macos
   workflow_dispatch:
+    inputs:
+      platforms:
+        description: "Plataformas (linux,windows,macos)"
+        type: string
+        default: linux,windows,macos
 
 jobs:
+  matrix:
+    name: Plataformas
+    runs-on: ubuntu-latest
+    outputs:
+      include: ${{ steps.pick.outputs.include }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: .github/platforms.json
+          sparse-checkout-cone-mode: false
+      - id: pick
+        env:
+          PLATFORMS: ${{ inputs.platforms || 'linux,windows,macos' }}
+        run: |
+          include=$(jq -c --arg p "$PLATFORMS" \
+            '[.[] | select(.platform as $x | $p | split(",") | index($x))]' .github/platforms.json)
+          [ "$include" != "[]" ] || { echo "::error::nenhuma plataforma em '$PLATFORMS'"; exit 1; }
+          echo "include=$include" >> "$GITHUB_OUTPUT"
+
   build:
-    name: ${{ matrix.name }}
+    name: ${{ matrix.label }}
+    needs: matrix
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
+      # Lista única em .github/platforms.json (os runners macOS-14 são Apple Silicon: Metal de verdade).
       matrix:
-        include:
-          - { name: "Linux x64 (Vulkan)", os: ubuntu-22.04, device: cpu, artifact: linux-x64 }
-          - { name: "Windows x64 (Vulkan)", os: windows-latest, device: cpu, artifact: win32-x64 }
-          # Runners macOS-14 são Apple Silicon com GPU: dá para testar o Metal de verdade.
-          - { name: "macOS arm64 (Metal)", os: macos-14, device: gpu, artifact: darwin-arm64 }
+        include: ${{ fromJSON(needs.matrix.outputs.include) }}
     defaults:
       run:
         shell: bash

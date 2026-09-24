@@ -1,0 +1,32 @@
+[
+  {
+    "platform": "linux",
+    "os": "ubuntu-22.04",
+    "device": "cpu",
+    "artifact": "linux-x64",
+    "label": "Linux x64 (Vulkan)",
+    "name": "Linux",
+    "builder": "--linux",
+    "pack": "linux-unpacked/resources"
+  },
+  {
+    "platform": "windows",
+    "os": "windows-latest",
+    "device": "cpu",
+    "artifact": "win32-x64",
+    "label": "Windows x64 (Vulkan)",
+    "name": "Windows",
+    "builder": "--win",
+    "pack": "win-unpacked/resources"
+  },
+  {
+    "platform": "macos",
+    "os": "macos-14",
+    "device": "gpu",
+    "artifact": "darwin-arm64",
+    "label": "macOS arm64 (Metal)",
+    "name": "macOS",
+    "builder": "--mac",
+    "pack": "mac-arm64/Whisper Transcriber.app/Contents/Resources"
+  }
+]
