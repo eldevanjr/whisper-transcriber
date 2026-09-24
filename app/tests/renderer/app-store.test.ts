@@ -131,7 +131,7 @@ describe('createAppStore', () => {
     api.emitQueue({ type: 'segment', jobId: a.id, segment: { start: 0, end: 1, text: 'oi' } })
     expect(state().live[a.id]).toEqual({
       phase: 'transcribing',
-      progress: { pct: 50, processedS: 10, totalS: 20, speed: 2 },
+      progress: { pct: 50, processedS: 10, totalS: 20, speed: 2, pass: null },
       segments: [{ start: 0, end: 1, text: 'oi' }]
     })
     api.emitQueue({ type: 'job', meta: { ...a, status: 'done' } })

@@ -6,6 +6,13 @@ import type { Device, Track } from './settings'
 export const PHASES = ['loading_model', 'extracting_audio', 'transcribing'] as const
 export type Phase = (typeof PHASES)[number]
 
+/** Refazer do ao vivo: qual faixa está sendo transcrita (uma depois da outra). */
+export interface TrackPass {
+  track: Track
+  index: number
+  count: number
+}
+
 export type QueueEvent =
   | { type: 'job'; meta: HistoryMeta }
   | { type: 'removed'; jobId: string }
@@ -14,9 +21,11 @@ export type QueueEvent =
       type: 'progress'
       jobId: string
       pct: number
+      /** Da faixa em andamento (refazer do ao vivo: uma faixa por vez) ou do arquivo. */
       processedS: number
       totalS: number
       speed: number
+      pass?: TrackPass
     }
   | { type: 'segment'; jobId: string; segment: Segment }
   | { type: 'notice'; jobId: string; code: 'CUDA_FALLBACK' }

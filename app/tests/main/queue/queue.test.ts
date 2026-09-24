@@ -1030,8 +1030,11 @@ describe('refazer o ao vivo', () => {
       segment: { start: 3, end: 4, text: 'O3', speaker: 'outros' }
     })
     // o progresso cobre as duas faixas: metade da primeira = 25%, metade da segunda = 75%
-    const pcts = events.flatMap((e) => (e.type === 'progress' ? [e.pct] : []))
-    expect(pcts).toEqual([25, 75])
+    const progress = events.flatMap((e) => (e.type === 'progress' ? [[e.pct, e.pass]] : []))
+    expect(progress).toEqual([
+      [25, { track: 'voce', index: 0, count: 2 }],
+      [75, { track: 'outros', index: 1, count: 2 }]
+    ])
   })
 
   it('falha no refazer mantém a versão ao vivo ativa', async () => {
