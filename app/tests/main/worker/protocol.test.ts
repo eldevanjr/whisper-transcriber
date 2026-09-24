@@ -81,3 +81,25 @@ describe('LineSplitter', () => {
 it('versão do protocolo é 3 (transcrição ao vivo)', () => {
   expect(PROTOCOL_VERSION).toBe(3)
 })
+
+it('eventos do ao vivo (protocolo v3)', () => {
+  expect(
+    parseWorkerEvent(
+      '{"type":"live_segment","session_id":"s","track":"voce","start":1,"end":2,"text":"oi"}'
+    )
+  ).toEqual({ type: 'live_segment', session_id: 's', track: 'voce', start: 1, end: 2, text: 'oi' })
+  expect(
+    parseWorkerEvent('{"type":"live_listening","session_id":"s","track":"outros","active":true}')
+  ).toMatchObject({ active: true })
+  expect(parseWorkerEvent('{"type":"live_lag","session_id":"s","seconds":4.5}')).toMatchObject({
+    seconds: 4.5
+  })
+  expect(
+    parseWorkerEvent('{"type":"live_error","session_id":"s","code":"GPU_FAILED"}')
+  ).toMatchObject({ code: 'GPU_FAILED' })
+  expect(
+    parseWorkerEvent(
+      '{"type":"live_segment","session_id":"s","track":"alguem","start":1,"end":2,"text":"x"}'
+    )
+  ).toBeNull()
+})

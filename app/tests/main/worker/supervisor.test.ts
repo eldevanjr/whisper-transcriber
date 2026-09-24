@@ -98,6 +98,23 @@ describe('WorkerSupervisor', () => {
     expect(events.map((e) => e.type === 'segment' && e.text)).toEqual(['a'])
   })
 
+  it('eventos do ao vivo vão para onLiveEvent, sem depender de um job', async () => {
+    const live = vi.fn()
+    const ctx = setup({ onLiveEvent: live })
+    const pending = ctx.supervisor.request({ cmd: 'self_test' })
+    const child = await started(ctx)
+    child.send({ type: 'live_lag', session_id: 's', seconds: 2 })
+    child.send({ type: 'result', id: child.lastCommand().id, data: {} })
+    await pending
+    expect(live).toHaveBeenCalledWith({ type: 'live_lag', session_id: 's', seconds: 2 })
+    const quiet = setup() // sem ouvinte: ignora
+    const other = quiet.supervisor.request({ cmd: 'self_test' })
+    const child2 = await started(quiet)
+    child2.send({ type: 'live_lag', session_id: 's', seconds: 2 })
+    child2.send({ type: 'result', id: child2.lastCommand().id, data: {} })
+    await other
+  })
+
   it('erro do worker rejeita com o código dele', async () => {
     const ctx = setup()
     const pending = ctx.supervisor.request({ cmd: 'self_test' })

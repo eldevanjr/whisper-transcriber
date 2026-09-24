@@ -12,7 +12,8 @@ import {
   serializeCommand,
   type JobEvent,
   type WorkerCommand,
-  type WorkerEvent
+  type WorkerEvent,
+  type LiveWorkerEvent
 } from './protocol'
 
 export interface ChildLike {
@@ -55,9 +56,13 @@ export interface SupervisorOptions {
   readyTimeoutMs?: number
   now?: () => number
   sleep?: (ms: number) => Promise<void>
+  /** Eventos da sessão ao vivo (não pertencem a um job da fila). */
+  onLiveEvent?: (event: LiveWorkerEvent) => void
 }
 
 export const MAX_RESTARTS = 3
+
+const isLiveEvent = (event: WorkerEvent): event is LiveWorkerEvent => event.type.startsWith('live_')
 export const RESTART_WINDOW_MS = 60_000
 
 type StopReason = 'canceled' | 'timeout' | 'crash' | 'mismatch'
@@ -221,6 +226,10 @@ export class WorkerSupervisor implements WorkerPort {
   }
 
   private dispatch(running: Running, event: WorkerEvent): void {
+    if (isLiveEvent(event)) {
+      this.options.onLiveEvent?.(event)
+      return
+    }
     switch (event.type) {
       case 'ready':
         this.onReady(running, event.protocol, event.version)

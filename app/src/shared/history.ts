@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { TRACKS } from './settings'
 import { ERROR_CODES, type ErrorCode } from './errors'
 import { MODEL_IDS } from './models'
 
@@ -29,7 +30,11 @@ export const HistoryMetaSchema = z.object({
   language: z.string().nullable(),
   languageDetected: z.string().nullable(),
   duration: z.number().nullable(),
-  error: ErrorInfoSchema.nullable()
+  error: ErrorInfoSchema.nullable(),
+  // Transcrição ao vivo: faixas gravadas e qual versão aparece (ao vivo ou refeita).
+  kind: z.enum(['file', 'live']).default('file'),
+  tracks: z.array(z.enum(TRACKS)).optional(),
+  activeVersion: z.enum(['live', 'redo']).optional()
 })
 export type HistoryMeta = z.infer<typeof HistoryMetaSchema>
 
@@ -42,7 +47,8 @@ export interface Segment {
 export const TranscriptEntrySchema = z.object({
   inicio: z.number(),
   fim: z.number(),
-  texto: z.string()
+  texto: z.string(),
+  falante: z.enum(TRACKS).optional()
 })
 export type TranscriptEntry = z.infer<typeof TranscriptEntrySchema>
 

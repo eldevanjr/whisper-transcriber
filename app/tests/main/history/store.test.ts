@@ -48,7 +48,8 @@ describe('HistoryStore', () => {
       language: 'pt',
       languageDetected: null,
       duration: null,
-      error: null
+      error: null,
+      kind: 'file'
     })
     expect(await store.get(meta.id)).toEqual(meta)
   })

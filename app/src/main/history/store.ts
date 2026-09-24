@@ -65,7 +65,8 @@ export class HistoryStore {
       language: job.language,
       languageDetected: null,
       duration: null,
-      error: null
+      error: null,
+      kind: 'file'
     }
     await writeJsonAtomic(this.paths(meta.id).meta, meta)
     return meta

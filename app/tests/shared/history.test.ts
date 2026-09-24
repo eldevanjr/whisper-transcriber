@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { HistoryMetaSchema, isJobId, toTranscriptEntry } from '../../src/shared/history'
+import {
+  HistoryMetaSchema,
+  isJobId,
+  toTranscriptEntry,
+  TranscriptEntrySchema
+} from '../../src/shared/history'
 
 export const JOB_ID = '3f1c2a4e-8b7d-4c6a-9e2f-1a2b3c4d5e6f'
 
@@ -34,7 +39,50 @@ describe('history', () => {
       duration: null,
       error: { code: 'NO_AUDIO', message: 'sem áudio' }
     }
-    expect(HistoryMetaSchema.parse(meta)).toEqual(meta)
+    expect(HistoryMetaSchema.parse(meta)).toEqual({ ...meta, kind: 'file' })
     expect(HistoryMetaSchema.safeParse({ ...meta, status: 'x' }).success).toBe(false)
+  })
+})
+
+describe('histórico do ao vivo', () => {
+  const base = {
+    id: '0b6d7e1c-2f0a-4c8e-9d1b-3a5f6c7d8e9f',
+    fileName: 'Reunião',
+    sourcePath: '',
+    mediaKind: 'audio',
+    createdAt: '2026-09-23T10:00:00.000Z',
+    status: 'done',
+    model: 'medium',
+    language: null,
+    languageDetected: null,
+    duration: 60,
+    error: null
+  }
+
+  it('item antigo (sem kind) é de arquivo', () => {
+    expect(HistoryMetaSchema.parse(base).kind).toBe('file')
+  })
+
+  it('item ao vivo guarda as faixas e a versão ativa', () => {
+    const meta = HistoryMetaSchema.parse({
+      ...base,
+      kind: 'live',
+      tracks: ['voce', 'outros'],
+      activeVersion: 'live'
+    })
+    expect(meta.tracks).toEqual(['voce', 'outros'])
+    expect(meta.activeVersion).toBe('live')
+    expect(HistoryMetaSchema.safeParse({ ...base, tracks: ['alguem'] }).success).toBe(false)
+  })
+
+  it('trecho pode ter falante', () => {
+    expect(
+      TranscriptEntrySchema.parse({ inicio: 0, fim: 1, texto: 'oi', falante: 'voce' })
+    ).toEqual({
+      inicio: 0,
+      fim: 1,
+      texto: 'oi',
+      falante: 'voce'
+    })
   })
 })

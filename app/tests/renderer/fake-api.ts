@@ -28,6 +28,7 @@ export function makeMeta(patch: Partial<HistoryMeta> = {}): HistoryMeta {
     model: 'medium',
     language: 'pt',
     languageDetected: 'pt',
+    kind: 'file',
     duration: 125,
     error: null,
     ...patch
