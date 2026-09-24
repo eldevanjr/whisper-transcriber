@@ -131,11 +131,17 @@ export class FakeApi implements TranscriberApi {
       const meta = this.entries.find((entry) => entry.id === id)
       if (detail) return Promise.resolve(detail)
       if (!meta) return Promise.reject(apiError('NOT_FOUND', 'não encontrado'))
-      return Promise.resolve({ meta, transcript: [], videoAvailable: true })
+      return Promise.resolve({ meta, transcript: [], videoAvailable: true, hasRedo: false })
     }),
     clear: vi.fn(() => Promise.resolve({ count: this.entries.length, bytes: 1000 })),
     stats: vi.fn(() => Promise.resolve({ count: this.entries.length, bytes: 52_428_800 })),
-    remove: vi.fn(() => Promise.resolve(null))
+    remove: vi.fn(() => Promise.resolve(null)),
+    setVersion: vi.fn((id: string, version: 'live' | 'redo') => {
+      const meta = this.entries.find((entry) => entry.id === id) ?? makeMeta({ id })
+      const updated = { ...meta, activeVersion: version }
+      this.emitQueue({ type: 'job', meta: updated })
+      return Promise.resolve(updated)
+    })
   }
 
   models = {

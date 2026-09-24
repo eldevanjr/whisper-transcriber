@@ -7,6 +7,7 @@ import { Button } from '../../components/Button'
 import { ErrorNotice } from '../../components/ErrorNotice'
 import { usePlayer } from '../../hooks/usePlayer'
 import { useQueueActions } from '../../hooks/useQueueActions'
+import { useSpeakerLabels } from '../../hooks/useSpeakerLabels'
 import { useAppStore } from '../../providers'
 
 const STICK_PX = 40
@@ -21,6 +22,7 @@ function Bubble({
   active: boolean
   onSeek: () => void
 }) {
+  const labels = useSpeakerLabels()
   return (
     <li>
       <button
@@ -29,6 +31,9 @@ function Bubble({
         onClick={onSeek}
         className={`w-full rounded-2xl rounded-tl-sm px-3 py-2 text-left text-sm ${active ? 'bg-accent-soft ring-1 ring-accent' : 'bg-surface-2 hover:bg-accent-soft'}`}
       >
+        {segment.speaker && (
+          <span className="mr-2 text-xs font-medium text-muted">{labels[segment.speaker]}</span>
+        )}
         <span className="mr-2 font-mono text-xs text-accent">{formatTime(segment.start)}</span>{' '}
         {segment.text.trim()}
       </button>

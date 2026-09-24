@@ -877,3 +877,155 @@ describe('TranscriptionQueue durante o ao vivo', () => {
     ctx.queue.releaseLive()
   })
 })
+
+describe('refazer o ao vivo', () => {
+  async function liveItem(
+    history: HistoryStore,
+    tracks: ('voce' | 'outros')[] = ['voce', 'outros']
+  ) {
+    const meta = await history.createLive({
+      title: 'Reunião',
+      tracks,
+      model: 'medium',
+      language: 'pt'
+    })
+    await history.appendSegment(meta.id, { start: 0, end: 1, text: 'ao vivo', speaker: 'voce' })
+    await history.finalizeLive(meta.id)
+    return history.update(meta.id, { status: 'done', duration: 9 })
+  }
+
+  // Cada faixa fala num momento: Você em 0 s e 6 s, Outros em 3 s.
+  const byTrack: Script = (command, options) => {
+    if (command.cmd !== 'transcribe') return Promise.resolve({ loaded: true })
+    const job = command.params.job_id
+    const outros = command.params.input_path.endsWith('outros.m4a')
+    const starts = outros ? [3] : [0, 6]
+    for (const [index, start] of starts.entries()) {
+      options.onEvent?.({
+        type: 'segment',
+        job_id: job,
+        index,
+        start,
+        end: start + 1,
+        text: `${outros ? 'O' : 'V'}${start}`
+      })
+    }
+    options.onEvent?.({
+      type: 'progress',
+      job_id: job,
+      pct: 50,
+      processed_s: 5,
+      total_s: 10,
+      speed: 2
+    })
+    options.onEvent?.({
+      type: 'done',
+      job_id: job,
+      duration: outros ? 10 : 8,
+      language_detected: 'pt'
+    })
+    return Promise.resolve({ segments: starts.length })
+  }
+
+  it('transcreve cada faixa inteira, marca o falante e intercala por início', async () => {
+    const { queue, history, events, worker } = await setup(byTrack)
+    const meta = await liveItem(history)
+    await queue.retry(meta.id)
+    await queue.whenIdle()
+    const dir = history.paths(meta.id).dir
+    const transcribes = worker.calls.flatMap((c) =>
+      c.command.cmd === 'transcribe' ? [c.command.params] : []
+    )
+    expect(transcribes).toEqual([
+      {
+        job_id: meta.id,
+        input_path: join(dir, 'voce.m4a'),
+        language: 'pt',
+        audio_out_path: join(dir, 'voce.m4a')
+      },
+      {
+        job_id: meta.id,
+        input_path: join(dir, 'outros.m4a'),
+        language: 'pt',
+        audio_out_path: join(dir, 'outros.m4a')
+      }
+    ])
+    const final = await history.get(meta.id)
+    expect(final).toMatchObject({
+      status: 'done',
+      activeVersion: 'redo',
+      duration: 10,
+      languageDetected: 'pt'
+    })
+    expect(await history.readActive(final)).toEqual([
+      { inicio: 0, fim: 1, texto: 'V0', falante: 'voce' },
+      { inicio: 3, fim: 4, texto: 'O3', falante: 'outros' },
+      { inicio: 6, fim: 7, texto: 'V6', falante: 'voce' }
+    ])
+    // a versão ao vivo continua guardada
+    expect(await history.readActive({ ...final, activeVersion: 'live' })).toEqual([
+      { inicio: 0, fim: 1, texto: 'ao vivo', falante: 'voce' }
+    ])
+    expect(events).toContainEqual({
+      type: 'segment',
+      jobId: meta.id,
+      segment: { start: 3, end: 4, text: 'O3', speaker: 'outros' }
+    })
+    // o progresso cobre as duas faixas: metade da primeira = 25%, metade da segunda = 75%
+    const pcts = events.flatMap((e) => (e.type === 'progress' ? [e.pct] : []))
+    expect(pcts).toEqual([25, 75])
+  })
+
+  it('falha no refazer mantém a versão ao vivo ativa', async () => {
+    const { queue, history } = await setup((command) =>
+      command.cmd === 'transcribe'
+        ? Promise.reject(new AppError('FILE_NOT_FOUND', 'sem voce.m4a'))
+        : Promise.resolve({ loaded: true })
+    )
+    const meta = await liveItem(history, ['voce'])
+    await queue.retry(meta.id)
+    await queue.whenIdle()
+    const final = await history.get(meta.id)
+    expect(final).toMatchObject({ status: 'failed', activeVersion: 'live' })
+    expect(await history.hasRedo(final)).toBe(false)
+  })
+
+  it('item ao vivo sem faixas registradas: conclui sem nada para transcrever', async () => {
+    const { queue, history, worker } = await setup(byTrack)
+    const meta = await liveItem(history)
+    await history.update(meta.id, { tracks: undefined })
+    await queue.retry(meta.id)
+    await queue.whenIdle()
+    expect(worker.calls.some((c) => c.command.cmd === 'transcribe')).toBe(false)
+    expect(await history.get(meta.id)).toMatchObject({ status: 'done', activeVersion: 'redo' })
+  })
+
+  it('escolher a versão grava e avisa a tela', async () => {
+    const { queue, history, events } = await setup(byTrack)
+    const meta = await liveItem(history)
+    await queue.retry(meta.id)
+    await queue.whenIdle()
+    const chosen = await queue.setVersion(meta.id, 'live')
+    expect(chosen.activeVersion).toBe('live')
+    expect(events.at(-1)).toEqual({ type: 'job', meta: chosen })
+    expect((await queue.setVersion(meta.id, 'redo')).activeVersion).toBe('redo')
+  })
+
+  it('sem refeita (ou item de arquivo) não há versão para escolher', async () => {
+    const { queue, history } = await setup()
+    const meta = await liveItem(history)
+    await expect(queue.setVersion(meta.id, 'redo')).rejects.toMatchObject({
+      code: 'INVALID_REQUEST'
+    })
+    expect((await queue.setVersion(meta.id, 'live')).activeVersion).toBe('live')
+    const file = await history.create({
+      sourcePath: '/v/a.mp4',
+      mediaKind: 'video',
+      model: 'medium',
+      language: null
+    })
+    await expect(queue.setVersion(file.id, 'live')).rejects.toMatchObject({
+      code: 'INVALID_REQUEST'
+    })
+  })
+})

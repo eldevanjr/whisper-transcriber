@@ -42,7 +42,8 @@ describe('createAppStore', () => {
     api.details.set(job.id, {
       meta: job,
       transcript: [{ inicio: 0, fim: 1, texto: 'já veio' }],
-      videoAvailable: true
+      videoAvailable: true,
+      hasRedo: false
     })
     const { state } = await ready(api)
     expect(state().queue.current).toBe(job.id)
@@ -80,7 +81,8 @@ describe('createAppStore', () => {
         { inicio: 0, fim: 1, texto: 'a' },
         { inicio: 1, fim: 2, texto: 'b' }
       ],
-      videoAvailable: true
+      videoAvailable: true,
+      hasRedo: false
     })
     const get = api.history.get.getMockImplementation()!
     api.history.get.mockImplementation(

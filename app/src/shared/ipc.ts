@@ -29,6 +29,7 @@ export const IPC = {
   historyClear: 'history:clear',
   historyStats: 'history:stats',
   historyRemove: 'history:remove',
+  historySetVersion: 'history:set-version',
   modelsStatus: 'models:status',
   modelsInstall: 'models:install',
   modelsRemove: 'models:remove',
@@ -78,9 +79,14 @@ export interface LiveStartInput {
 
 export interface HistoryDetail {
   meta: HistoryMeta
+  /** A versão ativa (item ao vivo: a refeita ou a ao vivo). */
   transcript: TranscriptEntry[]
   videoAvailable: boolean
+  /** Item ao vivo já refeito: dá para escolher a versão. */
+  hasRedo: boolean
 }
+
+export type TranscriptVersion = 'live' | 'redo'
 
 export interface ModelsStatus {
   installed: ModelId[]
@@ -133,6 +139,7 @@ export interface TranscriberApi {
     clear(): Promise<StorageStats>
     stats(): Promise<StorageStats>
     remove(id: string): Promise<null>
+    setVersion(id: string, version: TranscriptVersion): Promise<HistoryMeta>
   }
   models: {
     /** Formato ct2 (faster-whisper) por padrão; ggml para o whisper.cpp (GPU Vulkan/Metal). */

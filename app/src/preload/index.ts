@@ -41,7 +41,8 @@ export const api: TranscriberApi = {
     get: (id) => invoke(IPC.historyGet, id),
     clear: () => invoke(IPC.historyClear),
     stats: () => invoke(IPC.historyStats),
-    remove: (id) => invoke(IPC.historyRemove, id)
+    remove: (id) => invoke(IPC.historyRemove, id),
+    setVersion: (id, version) => invoke(IPC.historySetVersion, { id, version })
   },
   models: {
     status: (format) => invoke(IPC.modelsStatus, format),

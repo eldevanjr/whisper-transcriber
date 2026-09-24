@@ -1,11 +1,11 @@
 import { stat } from 'node:fs/promises'
-import { isAbsolute } from 'node:path'
+import { isAbsolute, join } from 'node:path'
 import { AppError, toAppError } from '../../shared/errors'
 import type { EnqueueResult, QueueEvent, QueueState } from '../../shared/events'
 import type { HistoryMeta } from '../../shared/history'
 import { fileNameOf, mediaKindOf } from '../../shared/media'
 import { formatForDevice, type ModelFormat, type ModelId } from '../../shared/models'
-import type { Device, Settings } from '../../shared/settings'
+import type { Device, Settings, Track } from '../../shared/settings'
 import type { HistoryStore } from '../history/store'
 import type { JobEvent } from '../worker/protocol'
 import type { Logger, WorkerPort } from '../worker/supervisor'
@@ -32,6 +32,13 @@ interface Target {
 interface JobResult {
   duration: number | null
   languageDetected: string | null
+}
+
+/** Uma das faixas do refazer do ao vivo: o falante e a fatia do progresso total. */
+interface TrackPass {
+  track: Track
+  index: number
+  count: number
 }
 
 // Um abort nativo do driver/cuDNN derruba o processo: o supervisor vê WORKER_CRASHED.
@@ -151,6 +158,16 @@ export class TranscriptionQueue {
     }
     await this.deps.history.remove(id)
     this.deps.emit({ type: 'removed', jobId: id })
+  }
+
+  /** Item ao vivo: mostra a versão refeita ou a ao vivo. */
+  async setVersion(id: string, version: 'live' | 'redo'): Promise<HistoryMeta> {
+    const meta = await this.deps.history.get(id)
+    if (meta.kind !== 'live') throw new AppError('INVALID_REQUEST', 'Item sem versões')
+    if (version === 'redo' && !(await this.deps.history.hasRedo(meta))) {
+      throw new AppError('INVALID_REQUEST', 'Este item ainda não foi refeito')
+    }
+    return this.setStatus(id, { activeVersion: version })
   }
 
   /** Marca o job atual; ele termina no próximo ponto de verificação, mesmo sem requisição pendente. */
@@ -275,7 +292,8 @@ export class TranscriptionQueue {
       await this.writes
       await this.deps.history.finalize(id)
       this.checkCanceled(id)
-      await this.setStatus(id, { status: 'done', ...result })
+      const redone = meta.kind === 'live' ? { activeVersion: 'redo' as const } : {}
+      await this.setStatus(id, { status: 'done', ...result, ...redone })
     } catch (error) {
       await this.fail(id, error).catch((failure: unknown) => {
         this.reportLostFailure(meta, error, failure)
@@ -324,24 +342,59 @@ export class TranscriptionQueue {
     await this.loadModel(meta.model, device, target.configured)
     this.checkCanceled(meta.id)
     const result: JobResult = { duration: null, languageDetected: null }
+    if (meta.kind === 'live') {
+      await this.executeTracks(meta, settings, device, result)
+      return result
+    }
+    await this.transcribe(meta, settings, device, result, {
+      input: meta.sourcePath,
+      audioOut: this.deps.history.paths(meta.id).audio,
+      pass: null
+    })
+    return result
+  }
+
+  /** Refazer do ao vivo: cada faixa gravada inteira (já é m4a: o worker não extrai de novo). */
+  private async executeTracks(
+    meta: HistoryMeta,
+    settings: Settings,
+    device: Device,
+    result: JobResult
+  ): Promise<void> {
+    const tracks = meta.tracks ?? []
+    const dir = this.deps.history.paths(meta.id).dir
+    for (const [index, track] of tracks.entries()) {
+      this.checkCanceled(meta.id)
+      const file = join(dir, `${track}.m4a`)
+      const pass = { track, index, count: tracks.length }
+      await this.transcribe(meta, settings, device, result, { input: file, audioOut: file, pass })
+    }
+  }
+
+  private async transcribe(
+    meta: HistoryMeta,
+    settings: Settings,
+    device: Device,
+    result: JobResult,
+    source: { input: string; audioOut: string; pass: TrackPass | null }
+  ): Promise<void> {
     await this.deps.worker.request(
       {
         cmd: 'transcribe',
         params: {
           job_id: meta.id,
-          input_path: meta.sourcePath,
+          input_path: source.input,
           language: languageOf(settings),
-          audio_out_path: this.deps.history.paths(meta.id).audio
+          audio_out_path: source.audioOut
         }
       },
       {
         device,
         onEvent: (event) => {
-          this.onJobEvent(meta.id, event, result)
+          this.onJobEvent(meta.id, event, result, source.pass)
         }
       }
     )
-    return result
   }
 
   /** `configured` escolhe a engine (gpu → whisper.cpp com modelo GGML); `device` é onde roda. */
@@ -362,7 +415,12 @@ export class TranscriptionQueue {
     await this.deps.worker.request({ cmd: 'load_model', params }, { device })
   }
 
-  private onJobEvent(jobId: string, event: JobEvent, result: JobResult): void {
+  private onJobEvent(
+    jobId: string,
+    event: JobEvent,
+    result: JobResult,
+    pass: TrackPass | null
+  ): void {
     switch (event.type) {
       case 'phase':
         this.deps.emit({ type: 'phase', jobId, phase: event.phase })
@@ -371,21 +429,27 @@ export class TranscriptionQueue {
         this.deps.emit({
           type: 'progress',
           jobId,
-          pct: event.pct,
+          pct: pass ? (pass.index * 100 + event.pct) / pass.count : event.pct,
           processedS: event.processed_s,
           totalS: event.total_s,
           speed: event.speed
         })
         return
       case 'segment': {
-        const segment = { start: event.start, end: event.end, text: event.text }
+        const segment = {
+          start: event.start,
+          end: event.end,
+          text: event.text,
+          ...(pass ? { speaker: pass.track } : {})
+        }
         this.writes = this.writes.then(() => this.deps.history.appendSegment(jobId, segment))
         this.deps.emit({ type: 'segment', jobId, segment })
         return
       }
       case 'done':
-        result.duration = event.duration
-        result.languageDetected = event.language_detected
+        // Várias faixas: a sessão dura o que dura a mais longa.
+        result.duration = Math.max(result.duration ?? 0, event.duration)
+        result.languageDetected ??= event.language_detected
     }
   }
 

@@ -11,8 +11,10 @@ export interface Paragraph {
 /** Rótulos traduzidos dos falantes do ao vivo ("Você", "Outros"). */
 export type SpeakerLabels = Record<Track, string>
 
-const speaker = (falante: Track | undefined, labels: SpeakerLabels | undefined): string =>
-  falante && labels ? `${labels[falante]}: ` : ''
+export const speakerPrefix = (
+  falante: Track | undefined,
+  labels: SpeakerLabels | undefined
+): string => (falante && labels ? `${labels[falante]}: ` : '')
 
 export const PARAGRAPH_PAUSE_S = 1.5
 export const PARAGRAPH_MAX_CHARS = 600
@@ -34,7 +36,7 @@ export function toTimestamped(entries: readonly TranscriptEntry[], labels?: Spea
   return entries
     .map(
       (entry) =>
-        `[${formatTime(entry.inicio)} - ${formatTime(entry.fim)}] ${speaker(entry.falante, labels)}${entry.texto}\n`
+        `[${formatTime(entry.inicio)} - ${formatTime(entry.fim)}] ${speakerPrefix(entry.falante, labels)}${entry.texto}\n`
     )
     .join('')
 }
@@ -88,5 +90,5 @@ function newParagraph(entry: TranscriptEntry, text: string): Paragraph {
 }
 
 export function paragraphsToText(paragraphs: readonly Paragraph[], labels?: SpeakerLabels): string {
-  return paragraphs.map((p) => `${speaker(p.falante, labels)}${p.text}`).join('\n\n')
+  return paragraphs.map((p) => `${speakerPrefix(p.falante, labels)}${p.text}`).join('\n\n')
 }

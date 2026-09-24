@@ -177,7 +177,14 @@
     "json": "JSON",
     "empty": "No speech was recognized in this file.",
     "emptyHint": "If the file has speech, try again with a larger model or a fixed language (Settings → Transcription).",
-    "saved": "File saved."
+    "saved": "File saved.",
+    "listen": "Listen to",
+    "all": "All",
+    "version": "Version",
+    "redone": "Redone",
+    "liveVersion": "Live",
+    "liveNote": "Transcribed live. Redoing it with the full audio is usually more accurate.",
+    "redoLive": "Redo with the full audio"
   },
   "settings": {
     "title": "Settings",

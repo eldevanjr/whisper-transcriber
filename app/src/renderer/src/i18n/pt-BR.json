@@ -177,7 +177,14 @@
     "json": "JSON",
     "empty": "Nenhuma fala foi reconhecida neste arquivo.",
     "emptyHint": "Se o arquivo tem fala, tente de novo com um modelo maior ou com o idioma fixo (Configurações → Transcrição).",
-    "saved": "Arquivo salvo."
+    "saved": "Arquivo salvo.",
+    "listen": "Ouvir",
+    "all": "Tudo",
+    "version": "Versão",
+    "redone": "Refeita",
+    "liveVersion": "Ao vivo",
+    "liveNote": "Transcrita ao vivo. Refazer com o áudio completo costuma ficar mais preciso.",
+    "redoLive": "Refazer com o áudio completo"
   },
   "settings": {
     "title": "Configurações",

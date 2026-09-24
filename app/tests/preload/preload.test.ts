@@ -34,6 +34,11 @@ describe('preload', () => {
         { id: 'id', sourcePath: '/novo.mp3' }
       ],
       [() => api.history.remove('id'), IPC.historyRemove, 'id'],
+      [
+        () => api.history.setVersion('id', 'redo'),
+        IPC.historySetVersion,
+        { id: 'id', version: 'redo' }
+      ],
       [() => api.app.info(), IPC.appInfo, undefined],
       [() => api.history.list(), IPC.historyList, undefined],
       [() => api.history.get('id'), IPC.historyGet, 'id'],

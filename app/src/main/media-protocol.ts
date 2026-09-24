@@ -1,6 +1,6 @@
 import { createReadStream } from 'node:fs'
 import { stat } from 'node:fs/promises'
-import { extname } from 'node:path'
+import { extname, join } from 'node:path'
 import { Readable } from 'node:stream'
 import { AppError } from '../shared/errors'
 import { pathExists } from './fs-utils'
@@ -70,8 +70,12 @@ async function resolveMedia(
   id: string,
   pathname: string
 ): Promise<MediaFile> {
-  const audio = history.paths(id).audio // valida o id antes de qualquer acesso ao disco
+  const { audio, dir } = history.paths(id) // valida o id antes de qualquer acesso ao disco
   if (pathname === '/audio') return { path: audio, fallback: false }
+  // Ao vivo: cada lado da conversa (o /audio é a mistura).
+  if (pathname === '/voce' || pathname === '/outros') {
+    return { path: join(dir, `${pathname.slice(1)}.m4a`), fallback: false }
+  }
   if (pathname !== '/video') throw new AppError('NOT_FOUND', 'Mídia não encontrada')
   const meta = await history.get(id)
   if (meta.mediaKind === 'video' && (await pathExists(meta.sourcePath))) {

@@ -32,6 +32,7 @@ function setup(settingsOverride: Partial<Settings> = {}) {
       isIdle: vi.fn(() => true),
       retry: vi.fn(() => Promise.resolve({ id: JOB, status: 'queued' })),
       removeEntry: vi.fn(() => Promise.resolve()),
+      setVersion: vi.fn(() => Promise.resolve({ id: JOB, activeVersion: 'live' })),
       selfTest: vi.fn(() => Promise.resolve())
     },
     history: {
@@ -39,7 +40,8 @@ function setup(settingsOverride: Partial<Settings> = {}) {
       get: vi.fn(() =>
         Promise.resolve({ id: JOB, mediaKind: 'video', sourcePath: '/nao/existe.mp4' })
       ),
-      readTranscript: vi.fn(() => Promise.resolve([{ inicio: 0, fim: 1, texto: 'a' }])),
+      readActive: vi.fn(() => Promise.resolve([{ inicio: 0, fim: 1, texto: 'a' }])),
+      hasRedo: vi.fn(() => Promise.resolve(false)),
       clear: vi.fn(() => Promise.resolve({ count: 2, bytes: 10 })),
       stats: vi.fn(() => Promise.resolve({ count: 2, bytes: 10 }))
     },
@@ -179,10 +181,22 @@ describe('registerIpcHandlers', () => {
       ok({
         meta: { id: JOB, mediaKind: 'video', sourcePath: '/nao/existe.mp4' },
         transcript: [{ inicio: 0, fim: 1, texto: 'a' }],
-        videoAvailable: false
+        videoAvailable: false,
+        hasRedo: false
       })
     )
     expect(await call(IPC.historyStats)).toEqual(ok({ count: 2, bytes: 10 }))
+  })
+
+  it('histórico: escolher a versão de um item ao vivo', async () => {
+    const { call, services } = setup()
+    expect(await call(IPC.historySetVersion, { id: JOB, version: 'live' })).toEqual(
+      ok({ id: JOB, activeVersion: 'live' })
+    )
+    expect(services.queue.setVersion).toHaveBeenCalledWith(JOB, 'live')
+    expect(await call(IPC.historySetVersion, { id: JOB, version: 'outra' })).toEqual(
+      fail('INVALID_REQUEST')
+    )
   })
 
   it('limpar histórico só com a fila ociosa', async () => {

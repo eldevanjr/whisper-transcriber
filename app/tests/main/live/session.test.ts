@@ -228,7 +228,7 @@ describe('LiveService', () => {
       params: { dir: ctx.history.paths(meta.id).dir, tracks: ['voce'] }
     })
     expect(await ctx.history.get(meta.id)).toMatchObject({ status: 'interrupted', duration: 12.5 })
-    expect(await ctx.history.readTranscript(meta.id)).toEqual([
+    expect(await ctx.history.readActive(await ctx.history.get(meta.id))).toEqual([
       { inicio: 0, fim: 1, texto: 'Oi.', falante: 'voce' }
     ])
   })

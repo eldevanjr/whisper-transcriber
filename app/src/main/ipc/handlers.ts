@@ -56,6 +56,7 @@ export interface Services {
 
 const None = z.undefined()
 const JobId = z.string().refine(isJobId, 'identificador inválido')
+const SetVersionSchema = z.object({ id: JobId, version: z.enum(['live', 'redo']) })
 const ModelIdSchema = z.enum(MODEL_IDS)
 const FormatSchema = z.enum(MODEL_FORMATS)
 const ModelRefSchema = z.object({ id: ModelIdSchema, format: FormatSchema.default('ct2') })
@@ -175,10 +176,11 @@ function registerHistory(on: On, s: Services): void {
   on(IPC.historyList, None, () => s.history.list())
   on(IPC.historyGet, JobId, async (id) => {
     const meta = await s.history.get(id)
-    const transcript = await s.history.readTranscript(id)
+    const transcript = await s.history.readActive(meta)
     const videoAvailable = meta.mediaKind === 'video' && (await pathExists(meta.sourcePath))
-    return { meta, transcript, videoAvailable }
+    return { meta, transcript, videoAvailable, hasRedo: await s.history.hasRedo(meta) }
   })
+  on(IPC.historySetVersion, SetVersionSchema, ({ id, version }) => s.queue.setVersion(id, version))
   on(IPC.historyStats, None, () => s.history.stats())
   on(IPC.historyRemove, JobId, (id) => s.queue.removeEntry(id))
   on(IPC.historyClear, None, () => {
