@@ -121,7 +121,12 @@ class LiveSegmenter:
         return chunk
 
     def _cut(self, start: int) -> Chunk:
-        """Fala contínua: corta na janela de menor energia dos últimos 5 s."""
+        """Fala contínua: corta na janela de menor energia dos últimos 5 s (até a última fala)."""
+        spoken = (self._last_speech - start) // WINDOW  # janelas até o fim da última fala
+        if spoken < len(self._buffer):
+            # A fala já acabou (o silêncio só não chegou à pausa): fecha como numa pausa, senão o
+            # vale cairia no silêncio e sobraria um trecho só de ruído.
+            return self._close(start, min(self._last_speech + PAD_WINDOWS * WINDOW, self._pos))
         search = int(CUT_SEARCH_S * RATE / WINDOW)
         first = len(self._buffer) - search
         energies = [float(np.mean(w**2)) for w in self._buffer[first:]]

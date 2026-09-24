@@ -82,3 +82,18 @@ def test_blocos_de_tamanho_qualquer_mantem_a_linha_do_tempo() -> None:
 def test_pausa_invalida_e_recusada() -> None:
     with pytest.raises(ValueError, match="pausa"):
         LiveSegmenter("voce", pause_s=0.1, vad=fake_vad(""))
+
+
+def test_teto_com_a_fala_ja_acabando_nao_corta_no_silencio_final() -> None:
+    # 24,6 s de fala e depois ruído baixo: o vale fica no silêncio, depois da última fala.
+    # O corte vai até a fala + margem; nada de trecho "invertido" só de ruído.
+    speech = int(24.6 * 16000 / WINDOW)
+    total = int(27 * 16000 / WINDOW)
+    audio = np.full(total * WINDOW, 0.3, dtype=np.float32)
+    audio[speech * WINDOW :] = 0.001
+    seg = LiveSegmenter("voce", pause_s=1.0, vad=fake_vad("S" * speech + "_" * total))
+    chunks = seg.push(audio) + seg.flush()
+    assert len(chunks) == 1
+    assert chunks[0].start == pytest.approx(0.0)
+    assert chunks[0].end == pytest.approx(speech * STEP + PAD)
+    assert all(c.end > c.start for c in chunks)

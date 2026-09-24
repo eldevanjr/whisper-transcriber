@@ -25,6 +25,7 @@ from transcriber_worker.protocol import (
     Command,
     LiveAudioCommand,
     LiveFinalizeCommand,
+    LivePauseCommand,
     LiveStartCommand,
     LiveStopCommand,
     LoadModelCommand,
@@ -75,7 +76,9 @@ class Dispatcher:
         return command.cmd != "shutdown"
 
     def _run(self, command: Command) -> dict[str, Any]:
-        if isinstance(command, LiveAudioCommand | LiveStartCommand | LiveStopCommand):
+        if isinstance(
+            command, LiveAudioCommand | LiveStartCommand | LiveStopCommand | LivePauseCommand
+        ):
             return self._run_live(command)
         if isinstance(command, LiveFinalizeCommand):
             return {"durations": finalize(Path(command.params.dir), list(command.params.tracks))}
@@ -98,7 +101,8 @@ class Dispatcher:
         return self._live
 
     def _run_live(
-        self, command: LiveAudioCommand | LiveStartCommand | LiveStopCommand
+        self,
+        command: LiveAudioCommand | LiveStartCommand | LiveStopCommand | LivePauseCommand,
     ) -> dict[str, Any]:
         if isinstance(command, LiveAudioCommand):
             params = command.params
@@ -111,6 +115,9 @@ class Dispatcher:
                 command.params, self._engine, self._emit, vad_factory=default_vad_factory
             )
             return {"started": True}
+        if isinstance(command, LivePauseCommand):
+            self._session().pause()
+            return {"paused": True}
         segments = self._session().stop()
         self._live = None
         return {"segments": segments}

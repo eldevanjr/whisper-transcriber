@@ -89,11 +89,15 @@ class LiveSession:
         self._reloaded = True
         self._wake.set()
 
-    def stop(self) -> int:
+    def pause(self) -> None:
+        """Pausa: a frase em andamento é fechada e transcrita; a linha do tempo não muda."""
         for track, segmenter in self._segmenters.items():
             for chunk in segmenter.flush():
                 self._enqueue(chunk)
             self._update_listening(track, False)
+
+    def stop(self) -> int:
+        self.pause()
         self._stopping = True
         self._wake.set()
         self._chunks.put(None)

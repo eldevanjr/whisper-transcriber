@@ -224,3 +224,21 @@ def test_falha_da_gpu_durante_a_parada_nao_trava() -> None:
     release.set()
     stopper.join(timeout=2)
     assert result == [0]
+
+
+def test_pausa_fecha_e_transcreve_o_trecho_em_andamento() -> None:
+    session, rec, _ = make()
+    seq = feed(session, "voce", "SSSS")  # frase sem pausa no fim
+    session.pause()
+    deadline = time.monotonic() + 2
+    while not rec.of("live_segment") and time.monotonic() < deadline:
+        time.sleep(0.01)
+    assert len(rec.of("live_segment")) == 1  # saiu sem esperar retomar
+    assert [(e["track"], e["active"]) for e in rec.of("live_listening")] == [
+        ("voce", True),
+        ("voce", False),
+    ]
+    feed(session, "voce", "SSS" + "_" * 8, start_seq=seq)  # retoma na mesma linha do tempo
+    session.stop()
+    second = rec.of("live_segment")[1]
+    assert second["start"] == pytest.approx(0.4 - PAD, abs=0.04)

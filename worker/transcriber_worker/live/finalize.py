@@ -19,11 +19,14 @@ from transcriber_worker.errors import ErrorCode, WorkerError, classify_exception
 
 MIX_RATE = 48000
 MIX_GAIN = 0.7  # duas vozes somadas não estouram
+WAV_HEADER = 44  # o cabeçalho que o app grava antes do primeiro bloco
 BLOCK = MIX_RATE  # 1 s por vez: a mistura nunca carrega a sessão inteira na memória
 
 
 def finalize(folder: Path, tracks: list[str]) -> dict[str, float]:
-    recorded = [t for t in tracks if (folder / f"live-{t}.wav").is_file()]
+    recorded = [t for t in tracks if _has_audio(folder / f"live-{t}.wav")]
+    if not recorded:
+        return {}
     try:
         durations = {track: _convert(folder, track) for track in recorded}
         _mix(folder, recorded)
@@ -32,6 +35,16 @@ def finalize(folder: Path, tracks: list[str]) -> dict[str, float]:
     for track in recorded:
         (folder / f"live-{track}.wav").unlink()
     return durations
+
+
+def _has_audio(wav: Path) -> bool:
+    """Encerrou antes do primeiro bloco: só o cabeçalho. Não há o que converter; sai do caminho."""
+    if not wav.is_file():
+        return False
+    if wav.stat().st_size > WAV_HEADER:
+        return True
+    wav.unlink()
+    return False
 
 
 def _convert(folder: Path, track: str) -> float:

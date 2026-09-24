@@ -26,6 +26,13 @@ def live_wav(folder: Path, track: str, seconds: float, *, broken_header: bool = 
     return path
 
 
+def header_only(folder: Path, track: str) -> Path:
+    """O que o app grava ao abrir a faixa: 44 bytes de cabeçalho e nenhum bloco."""
+    path = folder / f"live-{track}.wav"
+    path.write_bytes(make_wav(folder / "base.wav", seconds=0.01, rate=48000).read_bytes()[:44])
+    return path
+
+
 def test_duas_faixas_viram_m4a_e_mistura_com_a_duracao_da_maior(tmp_path: Path) -> None:
     live_wav(tmp_path, "voce", 1.0)
     live_wav(tmp_path, "outros", 2.0)
@@ -73,7 +80,8 @@ def test_mistura_soma_as_faixas_sem_estourar(tmp_path: Path) -> None:
 
 def test_wav_sem_bloco_de_audio_e_invalido(tmp_path: Path) -> None:
     wav = tmp_path / "live-voce.wav"
-    wav.write_bytes(b"RIFF\x00\x00\x00\x00WAVEfmt \x10\x00\x00\x00" + b"\x00" * 16)
+    # maior que um cabeçalho, mas sem o bloco "data"
+    wav.write_bytes(b"RIFF\x00\x00\x00\x00WAVEfmt \x10\x00\x00\x00" + b"\x00" * 36)
     with pytest.raises(WorkerError) as info:
         finalize(tmp_path, ["voce"])
     assert info.value.code.value == "INVALID_MEDIA"
@@ -85,3 +93,19 @@ def test_mistura_nao_perde_o_final_quebrado(tmp_path: Path) -> None:
     live_wav(tmp_path, "outros", 0.62)
     finalize(tmp_path, ["voce", "outros"])
     assert duration(tmp_path / "audio.m4a") == pytest.approx(1.37, abs=0.05)
+
+
+def test_faixa_gravada_sem_nenhum_bloco_e_descartada(tmp_path: Path) -> None:
+    # Encerrou (ou caiu) antes do primeiro bloco: só o cabeçalho de 44 bytes.
+    live_wav(tmp_path, "voce", 1.0)
+    empty = header_only(tmp_path, "outros")
+    assert finalize(tmp_path, ["voce", "outros"]) == {"voce": pytest.approx(1.0, abs=0.01)}
+    assert not empty.exists()
+    assert (tmp_path / "audio.m4a").is_file()  # a mistura é só o microfone
+
+
+def test_nenhuma_faixa_com_audio_nao_gera_arquivos(tmp_path: Path) -> None:
+    empty = header_only(tmp_path, "voce")
+    assert finalize(tmp_path, ["voce"]) == {}
+    assert not empty.exists()
+    assert not (tmp_path / "audio.m4a").exists()

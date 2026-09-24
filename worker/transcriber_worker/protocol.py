@@ -142,6 +142,12 @@ class LiveStopCommand(_Strict):
     params: LiveStopParams
 
 
+class LivePauseCommand(_Strict):
+    id: str = Field(min_length=1)
+    cmd: Literal["live_pause"]
+    params: LiveStopParams  # só o session_id
+
+
 class LiveFinalizeCommand(_Strict):
     id: str = Field(min_length=1)
     cmd: Literal["live_finalize"]
@@ -156,6 +162,7 @@ Command = Annotated[
     | LiveStartCommand
     | LiveAudioCommand
     | LiveStopCommand
+    | LivePauseCommand
     | LiveFinalizeCommand,
     Field(discriminator="cmd"),
 ]

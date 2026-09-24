@@ -10,6 +10,7 @@ from transcriber_worker.protocol import (
     EventWriter,
     LiveAudioCommand,
     LiveFinalizeCommand,
+    LivePauseCommand,
     LiveStartCommand,
     LiveStopCommand,
     LoadModelCommand,
@@ -218,6 +219,7 @@ def test_parse_live_commands() -> None:
     assert isinstance(audio, LiveAudioCommand)
     assert audio.params.samples().tolist() == [0, 1]
     assert isinstance(parse_command(_live("live_stop", session_id="s1")), LiveStopCommand)
+    assert isinstance(parse_command(_live("live_pause", session_id="s1")), LivePauseCommand)
     fin = parse_command(_live("live_finalize", dir="/h/s1", tracks=["voce"]))
     assert isinstance(fin, LiveFinalizeCommand)
 

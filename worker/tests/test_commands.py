@@ -247,16 +247,19 @@ def test_live_session_de_ponta_a_ponta_pelo_dispatcher(monkeypatch: pytest.Monke
         dispatcher.handle(
             _live("live_audio", session_id="s1", track="voce", seq=seq, pcm16_b64=_pcm(value))
         )
+    dispatcher.handle(_live("live_pause", session_id="s1"))
     dispatcher.handle(_live("live_stop", session_id="s1"))
-    assert _results(events) == ["live_start-1", "live_stop-1"]  # live_audio não responde
+    # live_audio não responde
+    assert _results(events) == ["live_start-1", "live_pause-1", "live_stop-1"]
     assert events[-1]["data"] == {"segments": 0}  # FakeModel sem trechos
 
 
 def test_live_audio_sem_sessao_e_erro(monkeypatch: pytest.MonkeyPatch) -> None:
     dispatcher, events, *_ = _make()
     dispatcher.handle(_live("live_audio", session_id="s1", track="voce", seq=0, pcm16_b64=_pcm(0)))
+    dispatcher.handle(_live("live_pause", session_id="s1"))
     dispatcher.handle(_live("live_stop", session_id="s1"))
-    assert [e["code"] for e in events if e["type"] == "error"] == ["LIVE_NOT_STARTED"] * 2
+    assert [e["code"] for e in events if e["type"] == "error"] == ["LIVE_NOT_STARTED"] * 3
 
 
 def test_sessao_ativa_recusa_transcrever_e_outra_sessao(monkeypatch: pytest.MonkeyPatch) -> None:
