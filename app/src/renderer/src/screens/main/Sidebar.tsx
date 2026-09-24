@@ -6,6 +6,7 @@ import {
   FileQuestion,
   FolderSearch,
   LoaderCircle,
+  Mic,
   Pause,
   Plus,
   RotateCcw,
@@ -121,6 +122,7 @@ export function Sidebar() {
   const corrupted = useAppStore((s) => s.corrupted)
   const selectedId = useAppStore((s) => s.selectedId)
   const select = useAppStore((s) => s.select)
+  const openLive = useAppStore((s) => s.openLive)
   const [toDelete, setToDelete] = useState<{ id: string; name: string } | null>(null)
 
   const inQueue = [queue.current, ...queue.pending].flatMap((id) => {
@@ -143,6 +145,10 @@ export function Sidebar() {
       <Button onClick={() => void actions.chooseAndEnqueue()}>
         <Plus aria-hidden size={16} />
         {t('main.add')}
+      </Button>
+      <Button variant="secondary" onClick={openLive}>
+        <Mic aria-hidden size={16} />
+        {t('live.open')}
       </Button>
       {inQueue.length > 0 && (
         <Section title={t('main.queue', { count: inQueue.length })}>

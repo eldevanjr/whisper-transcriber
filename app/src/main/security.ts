@@ -1,5 +1,5 @@
 import type { Session, WebContents } from 'electron'
-import { AUTHOR_GITHUB_URL } from '../shared/app-info'
+import { AUTHOR_GITHUB_URL, MIC_PERMISSION_URLS } from '../shared/app-info'
 
 export const CSP = [
   "default-src 'self'",
@@ -23,7 +23,11 @@ const EXTERNAL_PREFIXES = [
   'https://huggingface.co/'
 ]
 
+// Esquemas do sistema (não https): só estas URLs exatas.
+const SYSTEM_URLS: ReadonlySet<string> = new Set<string>(Object.values(MIC_PERMISSION_URLS))
+
 export function isAllowedExternalUrl(url: string, extra: ReadonlySet<string> = new Set()): boolean {
+  if (SYSTEM_URLS.has(url)) return true
   let parsed: URL
   try {
     parsed = new URL(url)

@@ -74,7 +74,8 @@ describe('MainScreen', () => {
     api.details.set(meta.id, {
       meta,
       transcript: [{ inicio: 0, fim: 1, texto: 'recuperado' }],
-      videoAvailable: true
+      videoAvailable: true,
+      hasRedo: false
     })
     const { user } = await renderWithApp(<MainScreen />, { api })
     await user.click(
@@ -109,7 +110,8 @@ describe('MainScreen', () => {
             resolve({
               meta: a,
               transcript: [{ inicio: 0, fim: 1, texto: 'velho' }],
-              videoAvailable: true
+              videoAvailable: true,
+              hasRedo: false
             })
           }
         })
@@ -132,7 +134,8 @@ describe('MainScreen', () => {
     api.details.set(meta.id, {
       meta,
       transcript: [{ inicio: 0, fim: 1, texto: 'fim.' }],
-      videoAvailable: true
+      videoAvailable: true,
+      hasRedo: false
     })
     const { user } = await renderWithApp(<MainScreen />, { api })
     await user.click(

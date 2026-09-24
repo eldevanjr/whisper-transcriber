@@ -3,12 +3,13 @@ import type { HistoryMeta } from '../../../shared/history'
 import type { HistoryDetail } from '../../../shared/ipc'
 import { useApi } from '../providers'
 
-/** Detalhe (transcrição, vídeo disponível) do item selecionado; recarrega quando o status muda. */
+/** Detalhe do item selecionado; recarrega quando o status ou a versão (ao vivo) mudam. */
 export function useEntryDetail(meta: HistoryMeta | undefined): HistoryDetail | null {
   const api = useApi()
   const [detail, setDetail] = useState<{ id: string; value: HistoryDetail } | null>(null)
   const id = meta?.id
   const status = meta?.status
+  const version = meta?.activeVersion
 
   useEffect(() => {
     if (id === undefined) return
@@ -22,7 +23,7 @@ export function useEntryDetail(meta: HistoryMeta | undefined): HistoryDetail | n
     return () => {
       active = false
     }
-  }, [api, id, status])
+  }, [api, id, status, version])
 
   return detail !== null && detail.id === id ? detail.value : null
 }

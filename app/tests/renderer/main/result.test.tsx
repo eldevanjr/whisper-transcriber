@@ -17,7 +17,7 @@ const transcript = [
 
 function setup(api = new FakeApi()) {
   const meta = makeMeta({ fileName: 'aula 03.mp4' })
-  const detail: HistoryDetail = { meta, transcript, videoAvailable: true }
+  const detail: HistoryDetail = { meta, transcript, videoAvailable: true, hasRedo: false }
   return renderWithApp(
     <PlayerProvider>
       <Player meta={meta} detail={detail} />
@@ -112,7 +112,10 @@ describe('ResultPanel', () => {
     const meta = makeMeta()
     await renderWithApp(
       <PlayerProvider>
-        <ResultPanel meta={meta} detail={{ meta, transcript: [], videoAvailable: true }} />
+        <ResultPanel
+          meta={meta}
+          detail={{ meta, transcript: [], videoAvailable: true, hasRedo: false }}
+        />
       </PlayerProvider>
     )
     expect(screen.getByText('Nenhuma fala foi reconhecida neste arquivo.')).toBeInTheDocument()
@@ -125,7 +128,10 @@ describe('ResultPanel', () => {
     const meta = makeMeta({ status: 'done' })
     const { user } = await renderWithApp(
       <PlayerProvider>
-        <ResultPanel meta={meta} detail={{ meta, transcript: [], videoAvailable: true }} />
+        <ResultPanel
+          meta={meta}
+          detail={{ meta, transcript: [], videoAvailable: true, hasRedo: false }}
+        />
       </PlayerProvider>,
       { api }
     )
@@ -139,7 +145,7 @@ describe('ResultPanel', () => {
   it('concluído com texto: "Transcrever de novo" só na barra; em processamento, nenhum', async () => {
     const api = new FakeApi()
     const meta = makeMeta({ status: 'done' })
-    const detail: HistoryDetail = { meta, transcript, videoAvailable: true }
+    const detail: HistoryDetail = { meta, transcript, videoAvailable: true, hasRedo: false }
     const { user, unmount } = await renderWithApp(
       <PlayerProvider>
         <ResultPanel meta={meta} detail={detail} />

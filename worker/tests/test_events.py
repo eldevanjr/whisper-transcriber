@@ -3,7 +3,7 @@ from transcriber_worker.errors import ErrorCode, WorkerError
 
 
 def test_ready_event() -> None:
-    assert events.ready_event("1.2.3") == {"type": "ready", "protocol": 2, "version": "1.2.3"}
+    assert events.ready_event("1.2.3") == {"type": "ready", "protocol": 3, "version": "1.2.3"}
 
 
 def test_heartbeat_event() -> None:
@@ -84,4 +84,31 @@ def test_done_event() -> None:
         "job_id": "j",
         "duration": 12.346,
         "language_detected": "pt",
+    }
+
+
+def test_live_events() -> None:
+    assert events.live_segment_event("s", "voce", 1.0, 2.5, "oi") == {
+        "type": "live_segment",
+        "session_id": "s",
+        "track": "voce",
+        "start": 1.0,
+        "end": 2.5,
+        "text": "oi",
+    }
+    assert events.live_listening_event("s", "outros", True) == {
+        "type": "live_listening",
+        "session_id": "s",
+        "track": "outros",
+        "active": True,
+    }
+    assert events.live_lag_event("s", 3.25) == {
+        "type": "live_lag",
+        "session_id": "s",
+        "seconds": 3.2,
+    }
+    assert events.live_error_event("s", "GPU_FAILED") == {
+        "type": "live_error",
+        "session_id": "s",
+        "code": "GPU_FAILED",
     }

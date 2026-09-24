@@ -3,6 +3,9 @@
 from collections.abc import Callable
 from pathlib import Path
 
+import numpy as np
+from numpy.typing import NDArray
+
 from transcriber_worker.errors import ErrorCode, WorkerError, classify_exception
 from transcriber_worker.events import Emit
 from transcriber_worker.protocol import Device, LoadModelParams
@@ -92,6 +95,24 @@ class Engine:
         # O protocolo garante compute_type no faster-whisper.
         compute_type = params.compute_type or "int8"
         self._model = self._factory(params.model_dir, params.device, compute_type)
+
+    def transcribe_array(
+        self, audio: NDArray[np.float32], language: str | None
+    ) -> list[tuple[float, float, str]]:
+        """Trecho do ao vivo (já recortado pelo VAD): tempos relativos ao início do array."""
+        try:
+            if self._cpp is not None:
+                found: list[tuple[float, float, str]] = []
+                self._cpp.transcribe(audio, language, lambda s, e, t: found.append((s, e, t)))
+                return found
+            if self._model is None:
+                raise WorkerError(ErrorCode.MODEL_NOT_LOADED, "Nenhum modelo carregado")
+            segments, _info = self._model.transcribe(
+                audio, language=language, vad_filter=False, condition_on_previous_text=False
+            )
+            return [(s.start, s.end, s.text) for s in segments]
+        except Exception as exc:
+            raise classify_exception(exc, gpu=self._on_gpu()) from exc
 
     def _on_gpu(self) -> bool:
         return self._key is not None and self._key[2] == "gpu"

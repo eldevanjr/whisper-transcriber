@@ -1,8 +1,11 @@
+import base64
+import json
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 import av
+import numpy as np
 import pytest
 
 from tests.fakes import FakeModel
@@ -216,3 +219,81 @@ def test_transcribe_reuses_audio_already_extracted(tmp_path: Path) -> None:
     assert extract.calls == []
     assert transcribe.calls[0]["input"] == str(audio)
     assert [e["phase"] for e in events if e["type"] == "phase"] == ["transcribing"]
+
+
+def _live(cmd: str, **params: Any) -> Any:
+    from transcriber_worker.protocol import parse_command
+
+    return parse_command(json.dumps({"id": f"{cmd}-1", "cmd": cmd, "params": params}))
+
+
+def _pcm(value: int) -> str:
+    return base64.b64encode(np.full(1600, value, np.int16).tobytes()).decode()
+
+
+def _results(events: list[Event]) -> list[str]:
+    return [e["id"] for e in events if e["type"] == "result"]
+
+
+def test_live_session_de_ponta_a_ponta_pelo_dispatcher(monkeypatch: pytest.MonkeyPatch) -> None:
+    dispatcher, events, *_ = _make()
+    monkeypatch.setattr("transcriber_worker.commands.default_vad_factory", _loud_vad_factory)
+    dispatcher.handle(LOAD)
+    events.clear()
+    dispatcher.handle(
+        _live("live_start", session_id="s1", tracks=["voce"], language="pt", pause_s=0.5)
+    )
+    for seq, value in enumerate([3000] * 3 + [0] * 8):
+        dispatcher.handle(
+            _live("live_audio", session_id="s1", track="voce", seq=seq, pcm16_b64=_pcm(value))
+        )
+    dispatcher.handle(_live("live_pause", session_id="s1"))
+    dispatcher.handle(_live("live_stop", session_id="s1"))
+    # live_audio não responde
+    assert _results(events) == ["live_start-1", "live_pause-1", "live_stop-1"]
+    assert events[-1]["data"] == {"segments": 0}  # FakeModel sem trechos
+
+
+def test_live_audio_sem_sessao_e_erro(monkeypatch: pytest.MonkeyPatch) -> None:
+    dispatcher, events, *_ = _make()
+    dispatcher.handle(_live("live_audio", session_id="s1", track="voce", seq=0, pcm16_b64=_pcm(0)))
+    dispatcher.handle(_live("live_pause", session_id="s1"))
+    dispatcher.handle(_live("live_stop", session_id="s1"))
+    assert [e["code"] for e in events if e["type"] == "error"] == ["LIVE_NOT_STARTED"] * 3
+
+
+def test_sessao_ativa_recusa_transcrever_e_outra_sessao(monkeypatch: pytest.MonkeyPatch) -> None:
+    dispatcher, events, *_ = _make()
+    monkeypatch.setattr("transcriber_worker.commands.default_vad_factory", _loud_vad_factory)
+    dispatcher.handle(LOAD)
+    start = dict(session_id="s1", tracks=["voce"], language=None, pause_s=1.0)
+    dispatcher.handle(_live("live_start", **start))
+    events.clear()
+    dispatcher.handle(TRANSCRIBE)
+    dispatcher.handle(_live("live_start", **start))
+    assert [e["code"] for e in events if e["type"] == "error"] == ["LIVE_ACTIVE", "LIVE_ACTIVE"]
+    dispatcher.handle(LOAD)  # recarregar o modelo (queda da GPU) é permitido durante a sessão
+    assert _results(events)[-1] == "1"
+    dispatcher.handle(_live("live_stop", session_id="s1"))
+
+
+def _loud_vad_factory() -> Any:
+    return lambda pcm: [0.9 if abs(float(w.max())) > 0 else 0.1 for w in pcm.reshape(-1, 512)]
+
+
+def test_default_vad_factory_usa_o_silero() -> None:
+    from transcriber_worker.commands import default_vad_factory
+
+    probs = default_vad_factory()(np.zeros(1024, np.float32))
+    assert len(probs) == 2
+
+
+def test_live_finalize_pelo_dispatcher(tmp_path: Path) -> None:
+    from tests.media import make_wav
+
+    make_wav(tmp_path / "live-voce.wav", seconds=1.0, rate=48000)
+    dispatcher, events, *_ = _make()
+    dispatcher.handle(_live("live_finalize", dir=str(tmp_path), tracks=["voce"]))
+    assert events[-1]["type"] == "result"
+    assert events[-1]["data"]["durations"]["voce"] == pytest.approx(1.0, abs=0.1)
+    assert (tmp_path / "audio.m4a").is_file()

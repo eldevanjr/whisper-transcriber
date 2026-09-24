@@ -49,7 +49,11 @@
       "downloadModel": "Download the model again"
     },
     "report": "Report a problem",
-    "GPU_FAILED": "The GPU failed. Transcription continued on the CPU."
+    "GPU_FAILED": "The GPU failed. Transcription continued on the CPU.",
+    "LIVE_NOT_STARTED": "No live session is running.",
+    "LIVE_ACTIVE": "A live transcription is already running.",
+    "QUEUE_BUSY": "Wait for the queue to finish (or cancel the current file) to start live.",
+    "MIC_DENIED": "Microphone access was denied."
   },
   "notices": {
     "cudaFallback": "The GPU failed; this transcription continued on the CPU.",
@@ -173,7 +177,14 @@
     "json": "JSON",
     "empty": "No speech was recognized in this file.",
     "emptyHint": "If the file has speech, try again with a larger model or a fixed language (Settings → Transcription).",
-    "saved": "File saved."
+    "saved": "File saved.",
+    "listen": "Listen to",
+    "all": "All",
+    "version": "Version",
+    "redone": "Redone",
+    "liveVersion": "Live",
+    "liveNote": "Transcribed live. Redoing it with the full audio is usually more accurate.",
+    "redoLive": "Redo with the full audio"
   },
   "settings": {
     "title": "Settings",
@@ -181,6 +192,7 @@
     "sections": {
       "general": "General",
       "transcription": "Transcription",
+      "live": "Live",
       "storage": "Storage",
       "help": "Help",
       "about": "About",
@@ -294,5 +306,47 @@
       "noGpu": "No compatible graphics card was found on this computer. Transcription uses the processor (CPU): it works normally, just slower.",
       "unsupported": "This system does not support GPU acceleration. Transcription uses the processor (CPU): it works normally, just slower."
     }
+  },
+  "live": {
+    "open": "Live",
+    "title": "Live",
+    "sources": "Audio sources",
+    "transcription": "Transcription",
+    "mic": "Microphone",
+    "defaultMic": "System default",
+    "unnamedMic": "Microphone {{n}}",
+    "level": "Level: {{name}}",
+    "you": "You",
+    "others": "Others",
+    "systemAudio": "Computer audio (Others)",
+    "systemAudioHint": "What plays on the computer, such as the voices on the call.",
+    "systemUnavailable": "Not available on this system.",
+    "systemNotNow": "Could not capture the computer audio right now; the session continues with the microphone only.",
+    "pause": "Pause that ends a sentence",
+    "pauseValue": "{{value}} s",
+    "pauseHint": "Shorter: text shows up sooner. Longer: more complete sentences. 1.0 s works for conversations.",
+    "test": "Test",
+    "stopTest": "Stop test",
+    "preview": "Test preview",
+    "testHint": "Say something: the text shows up here and nothing is saved to the history.",
+    "start": "Start",
+    "busy": "Wait for the queued transcription to finish or cancel it to start.",
+    "rec": "REC",
+    "paused": "Paused",
+    "pauseSession": "Pause",
+    "resume": "Resume",
+    "stop": "End",
+    "stopping": "Ending…",
+    "conversation": "Conversation",
+    "empty": "Start talking: the text shows up here after each sentence.",
+    "listening": "listening ({{name}})",
+    "lag": "Transcription {{seconds}} s behind speech",
+    "lagHint": "The computer is falling behind: in settings, use the GPU or a smaller model. The recording stays complete.",
+    "deviceLost": "The microphone was disconnected. The session is paused and what was recorded is saved.",
+    "deviceLostHint": "Pick a microphone or reconnect the same one and resume.",
+    "reconnect": "Reconnect",
+    "permission": "Open system permissions",
+    "retry": "Try again",
+    "defaultTitle": "Meeting {{date}}"
   }
 }

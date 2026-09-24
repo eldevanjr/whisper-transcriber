@@ -7,7 +7,7 @@ from typing import Any
 
 from transcriber_worker.audio import OnProgress, extract_audio
 from transcriber_worker.engine import Engine
-from transcriber_worker.errors import classify_exception
+from transcriber_worker.errors import ErrorCode, WorkerError, classify_exception
 from transcriber_worker.events import (
     Emit,
     Event,
@@ -17,8 +17,17 @@ from transcriber_worker.events import (
     progress_event,
     result_event,
 )
+from transcriber_worker.live.finalize import finalize
+from transcriber_worker.live.segmenter import VadFn
+from transcriber_worker.live.session import LiveSession
+from transcriber_worker.live.vad import StreamingVad
 from transcriber_worker.protocol import (
     Command,
+    LiveAudioCommand,
+    LiveFinalizeCommand,
+    LivePauseCommand,
+    LiveStartCommand,
+    LiveStopCommand,
     LoadModelCommand,
     LoadModelParams,
     SelfTestCommand,
@@ -35,6 +44,10 @@ def _discard(_event: Event) -> None:
     return None
 
 
+def default_vad_factory() -> VadFn:
+    return StreamingVad().feed
+
+
 class Dispatcher:
     def __init__(
         self,
@@ -48,6 +61,7 @@ class Dispatcher:
         self._emit = emit
         self._extract = extract
         self._self_test_audio = self_test_audio
+        self._live: LiveSession | None = None
 
     def handle(self, command: Command) -> bool:
         try:
@@ -56,21 +70,64 @@ class Dispatcher:
             job_id = command.params.job_id if isinstance(command, TranscribeCommand) else None
             self._emit(error_event(classify_exception(exc), command_id=command.id, job_id=job_id))
         else:
-            self._emit(result_event(command.id, data))
+            # Os blocos do ao vivo chegam 10 vezes por segundo por faixa: só erros respondem.
+            if not isinstance(command, LiveAudioCommand):
+                self._emit(result_event(command.id, data))
         return command.cmd != "shutdown"
 
     def _run(self, command: Command) -> dict[str, Any]:
+        if isinstance(
+            command, LiveAudioCommand | LiveStartCommand | LiveStopCommand | LivePauseCommand
+        ):
+            return self._run_live(command)
+        if isinstance(command, LiveFinalizeCommand):
+            return {"durations": finalize(Path(command.params.dir), list(command.params.tracks))}
         if isinstance(command, LoadModelCommand):
             return self._load_model(command.params)
-        if isinstance(command, TranscribeCommand):
-            return self._run_transcribe(command.params)
-        if isinstance(command, SelfTestCommand):
+        if isinstance(command, TranscribeCommand | SelfTestCommand):
+            self._require_no_live()
+            if isinstance(command, TranscribeCommand):
+                return self._run_transcribe(command.params)
             return self._self_test()
         return {}
 
+    def _require_no_live(self) -> None:
+        if self._live is not None:
+            raise WorkerError(ErrorCode.LIVE_ACTIVE, "Há uma sessão ao vivo em andamento")
+
+    def _session(self) -> LiveSession:
+        if self._live is None:
+            raise WorkerError(ErrorCode.LIVE_NOT_STARTED, "Nenhuma sessão ao vivo")
+        return self._live
+
+    def _run_live(
+        self,
+        command: LiveAudioCommand | LiveStartCommand | LiveStopCommand | LivePauseCommand,
+    ) -> dict[str, Any]:
+        if isinstance(command, LiveAudioCommand):
+            params = command.params
+            self._session().audio(params.track, params.seq, params.samples())
+            return {}
+        if isinstance(command, LiveStartCommand):
+            self._require_no_live()
+            _ = self._engine.model  # sem modelo carregado, nem começa
+            self._live = LiveSession(
+                command.params, self._engine, self._emit, vad_factory=default_vad_factory
+            )
+            return {"started": True}
+        if isinstance(command, LivePauseCommand):
+            self._session().pause()
+            return {"paused": True}
+        segments = self._session().stop()
+        self._live = None
+        return {"segments": segments}
+
     def _load_model(self, params: LoadModelParams) -> dict[str, Any]:
         self._emit(phase_event("loading_model"))
-        return {"loaded": self._engine.load(params)}
+        loaded = self._engine.load(params)
+        if self._live is not None:  # queda da GPU no ao vivo: o trecho que falhou é refeito
+            self._live.model_changed()
+        return {"loaded": loaded}
 
     def _run_transcribe(self, params: TranscribeParams) -> dict[str, Any]:
         _ = self._engine.model  # falha antes de extrair o áudio se não há modelo

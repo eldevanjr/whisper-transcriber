@@ -1,4 +1,4 @@
-import { appendFile, mkdir, writeFile } from 'node:fs/promises'
+import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { HistoryStore } from '../../../src/main/history/store'
@@ -48,7 +48,8 @@ describe('HistoryStore', () => {
       language: 'pt',
       languageDetected: null,
       duration: null,
-      error: null
+      error: null,
+      kind: 'file'
     })
     expect(await store.get(meta.id)).toEqual(meta)
   })
@@ -176,5 +177,124 @@ describe('HistoryStore', () => {
     expect(cleared.count).toBe(1)
     expect(await store.list()).toEqual({ entries: [], corrupted: [] })
     expect(await pathExists(root)).toBe(true)
+  })
+})
+
+describe('HistoryStore — ao vivo', () => {
+  it('createLive cria o item ao vivo em processamento, com as faixas e a versão ao vivo', async () => {
+    const { store } = await makeStore()
+    const meta = await store.createLive({
+      title: 'Reunião 23/09 10:00',
+      tracks: ['voce', 'outros'],
+      model: 'medium',
+      language: null
+    })
+    expect(meta).toMatchObject({
+      kind: 'live',
+      fileName: 'Reunião 23/09 10:00',
+      sourcePath: '',
+      mediaKind: 'audio',
+      status: 'processing',
+      tracks: ['voce', 'outros'],
+      activeVersion: 'live'
+    })
+    expect(await pathExists(store.paths(meta.id).dir)).toBe(true)
+    expect(await store.get(meta.id)).toEqual(meta)
+  })
+
+  it('finalizeLive grava só a versão ao vivo (transcript.json fica para a refeita)', async () => {
+    const { store } = await makeStore()
+    const meta = await store.createLive({
+      title: 'R',
+      tracks: ['voce'],
+      model: 'small',
+      language: 'pt'
+    })
+    await store.appendSegment(meta.id, { start: 0, end: 1.5, text: 'Oi.', speaker: 'voce' })
+    await store.appendSegment(meta.id, { start: 2, end: 3, text: 'Tudo bem?', speaker: 'outros' })
+    const entries = await store.finalizeLive(meta.id)
+    expect(entries).toEqual([
+      { inicio: 0, fim: 1.5, texto: 'Oi.', falante: 'voce' },
+      { inicio: 2, fim: 3, texto: 'Tudo bem?', falante: 'outros' }
+    ])
+    const { transcript, live, partial } = store.paths(meta.id)
+    expect(JSON.parse(await readFile(live, 'utf8'))).toEqual(entries)
+    expect(await pathExists(transcript)).toBe(false)
+    expect(await pathExists(partial)).toBe(false)
+  })
+
+  it('finalize intercala por início os trechos das duas faixas (refazer do ao vivo)', async () => {
+    const { store } = await makeStore()
+    const meta = await store.createLive({
+      title: 'R',
+      tracks: ['voce', 'outros'],
+      model: 'small',
+      language: null
+    })
+    await store.appendSegment(meta.id, { start: 0, end: 1, text: 'A', speaker: 'voce' })
+    await store.appendSegment(meta.id, { start: 4, end: 5, text: 'C', speaker: 'voce' })
+    await store.appendSegment(meta.id, { start: 2, end: 3, text: 'B', speaker: 'outros' })
+    expect((await store.finalize(meta.id)).map((e) => e.texto)).toEqual(['A', 'B', 'C'])
+  })
+
+  it('versão ativa: ao vivo até existir a refeita; a escolha decide o que aparece', async () => {
+    const { store } = await makeStore()
+    let meta = await store.createLive({
+      title: 'R',
+      tracks: ['voce'],
+      model: 'small',
+      language: null
+    })
+    await store.appendSegment(meta.id, { start: 0, end: 1, text: 'ao vivo', speaker: 'voce' })
+    await store.finalizeLive(meta.id)
+    expect(await store.hasRedo(meta)).toBe(false)
+    expect((await store.readActive(meta)).map((e) => e.texto)).toEqual(['ao vivo'])
+    await store.appendSegment(meta.id, { start: 0, end: 1, text: 'refeita', speaker: 'voce' })
+    await store.finalize(meta.id)
+    meta = await store.update(meta.id, { activeVersion: 'redo' })
+    expect(await store.hasRedo(meta)).toBe(true)
+    expect((await store.readActive(meta)).map((e) => e.texto)).toEqual(['refeita'])
+    meta = await store.update(meta.id, { activeVersion: 'live' })
+    expect((await store.readActive(meta)).map((e) => e.texto)).toEqual(['ao vivo'])
+  })
+
+  it('arquivo comum: readActive é a transcrição de sempre e não há refeita', async () => {
+    const { store } = await makeStore()
+    const meta = await store.create({
+      sourcePath: '/v/a.mp4',
+      mediaKind: 'video',
+      model: 'small',
+      language: null
+    })
+    await store.appendSegment(meta.id, { start: 0, end: 1, text: 'oi' })
+    await store.finalize(meta.id)
+    expect((await store.readActive(meta)).map((e) => e.texto)).toEqual(['oi'])
+    expect(await store.hasRedo(meta)).toBe(false)
+  })
+
+  it('durante a sessão ao vivo, readActive mostra os trechos do parcial', async () => {
+    const { store } = await makeStore()
+    const meta = await store.createLive({
+      title: 'R',
+      tracks: ['voce'],
+      model: 'small',
+      language: null
+    })
+    await store.appendSegment(meta.id, { start: 0, end: 1, text: 'falando', speaker: 'voce' })
+    expect(await store.readActive(meta)).toEqual([
+      { inicio: 0, fim: 1, texto: 'falando', falante: 'voce' }
+    ])
+  })
+
+  it('versão ao vivo corrompida vira erro claro', async () => {
+    const { store } = await makeStore()
+    const meta = await store.createLive({
+      title: 'R',
+      tracks: ['voce'],
+      model: 'small',
+      language: null
+    })
+    await writeFile(store.paths(meta.id).live, '{quebrado', 'utf8')
+    await expect(store.readActive(meta)).rejects.toMatchObject({ code: 'INTERNAL' })
   })
 })

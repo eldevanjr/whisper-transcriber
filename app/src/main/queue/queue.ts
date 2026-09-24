@@ -1,11 +1,11 @@
 import { stat } from 'node:fs/promises'
-import { isAbsolute } from 'node:path'
+import { isAbsolute, join } from 'node:path'
 import { AppError, toAppError } from '../../shared/errors'
 import type { EnqueueResult, QueueEvent, QueueState } from '../../shared/events'
 import type { HistoryMeta } from '../../shared/history'
 import { fileNameOf, mediaKindOf } from '../../shared/media'
 import { formatForDevice, type ModelFormat, type ModelId } from '../../shared/models'
-import type { Device, Settings } from '../../shared/settings'
+import type { Device, Settings, Track } from '../../shared/settings'
 import type { HistoryStore } from '../history/store'
 import type { JobEvent } from '../worker/protocol'
 import type { Logger, WorkerPort } from '../worker/supervisor'
@@ -34,6 +34,13 @@ interface JobResult {
   languageDetected: string | null
 }
 
+/** Uma das faixas do refazer do ao vivo: o falante e a fatia do progresso total. */
+interface TrackPass {
+  track: Track
+  index: number
+  count: number
+}
+
 // Um abort nativo do driver/cuDNN derruba o processo: o supervisor vê WORKER_CRASHED.
 const GPU_FAILURES = new Set(['CUDA_FAILED', 'CUDA_UNAVAILABLE', 'GPU_FAILED', 'WORKER_CRASHED'])
 
@@ -57,6 +64,7 @@ export class TranscriptionQueue {
   private canceledId: string | null = null
   private stopping = false
   private testing = false
+  private live = false // sessão ao vivo: o worker é dela, a fila espera
   // Configurações em que a GPU já falhou nesta sessão: até mudarem, os jobs vão direto para a CPU.
   private gpuFailedFor: Settings | null = null
   private fallback: Target = { device: 'cpu', configured: 'cpu' }
@@ -133,6 +141,7 @@ export class TranscriptionQueue {
     if (!RETRYABLE.has(meta.status)) {
       throw new AppError('INVALID_REQUEST', 'Este item ainda está na fila')
     }
+    if (meta.kind === 'live') await this.deps.history.prepareRedo(meta)
     const source = sourcePath === undefined ? {} : await this.sourceFields(sourcePath)
     // Outro arquivo: o áudio extraído do antigo não serve. Mesmo arquivo: o worker reaproveita.
     if (sourcePath === undefined) await this.deps.history.discardPartial(id)
@@ -150,6 +159,16 @@ export class TranscriptionQueue {
     }
     await this.deps.history.remove(id)
     this.deps.emit({ type: 'removed', jobId: id })
+  }
+
+  /** Item ao vivo: mostra a versão refeita ou a ao vivo. */
+  async setVersion(id: string, version: 'live' | 'redo'): Promise<HistoryMeta> {
+    const meta = await this.deps.history.get(id)
+    if (meta.kind !== 'live') throw new AppError('INVALID_REQUEST', 'Item sem versões')
+    if (version === 'redo' && !(await this.deps.history.hasRedo(meta))) {
+      throw new AppError('INVALID_REQUEST', 'Este item ainda não foi refeito')
+    }
+    return this.setStatus(id, { activeVersion: version })
   }
 
   /** Marca o job atual; ele termina no próximo ponto de verificação, mesmo sem requisição pendente. */
@@ -172,7 +191,39 @@ export class TranscriptionQueue {
   }
 
   isIdle(): boolean {
-    return this.current === null && this.pending.length === 0 && !this.testing
+    return this.current === null && this.pending.length === 0 && !this.testing && !this.live
+  }
+
+  /** Ao vivo: segura a fila (arquivos novos esperam) e carrega o modelo das configurações. */
+  async holdForLive(): Promise<void> {
+    if (!this.isIdle()) {
+      throw new AppError('QUEUE_BUSY', 'Espere a fila terminar para começar o ao vivo')
+    }
+    this.live = true
+    try {
+      const settings = this.deps.settings.get()
+      const target = this.targetFor(settings)
+      await this.loadModel(requireModel(settings), target.device, target.configured)
+    } catch (error) {
+      this.releaseLive()
+      throw error
+    }
+  }
+
+  /** A GPU falhou no ao vivo: mesma regra da fila (resto da sessão na CPU). */
+  async reloadLiveOnCpu(): Promise<void> {
+    const settings = this.deps.settings.get()
+    const model = requireModel(settings)
+    this.gpuFailedFor = settings
+    this.fallback = await this.cpuTarget(model, settings)
+    // No mesmo processo: trocar de processo mataria a sessão ao vivo do worker (e os trechos na
+    // fila dele). O ambiente do processo da GPU também roda a CPU.
+    await this.loadModel(model, this.fallback.device, this.fallback.configured, settings.device)
+  }
+
+  releaseLive(): void {
+    this.live = false
+    this.pump()
   }
 
   whenIdle(): Promise<void> {
@@ -211,7 +262,8 @@ export class TranscriptionQueue {
   }
 
   private pump(): void {
-    if (this.current !== null || this.testing || this.stopping || this.pending.length === 0) return
+    if (this.current !== null || this.testing || this.live || this.stopping) return
+    if (this.pending.length === 0) return
     this.loop = this.drain()
   }
 
@@ -243,7 +295,8 @@ export class TranscriptionQueue {
       await this.writes
       await this.deps.history.finalize(id)
       this.checkCanceled(id)
-      await this.setStatus(id, { status: 'done', ...result })
+      const redone = meta.kind === 'live' ? { activeVersion: 'redo' as const } : {}
+      await this.setStatus(id, { status: 'done', ...result, ...redone })
     } catch (error) {
       await this.fail(id, error).catch((failure: unknown) => {
         this.reportLostFailure(meta, error, failure)
@@ -292,28 +345,68 @@ export class TranscriptionQueue {
     await this.loadModel(meta.model, device, target.configured)
     this.checkCanceled(meta.id)
     const result: JobResult = { duration: null, languageDetected: null }
+    if (meta.kind === 'live') {
+      await this.executeTracks(meta, settings, device, result)
+      return result
+    }
+    await this.transcribe(meta, settings, device, result, {
+      input: meta.sourcePath,
+      audioOut: this.deps.history.paths(meta.id).audio,
+      pass: null
+    })
+    return result
+  }
+
+  /** Refazer do ao vivo: cada faixa gravada inteira (já é m4a: o worker não extrai de novo). */
+  private async executeTracks(
+    meta: HistoryMeta,
+    settings: Settings,
+    device: Device,
+    result: JobResult
+  ): Promise<void> {
+    const tracks = meta.tracks ?? []
+    const dir = this.deps.history.paths(meta.id).dir
+    for (const [index, track] of tracks.entries()) {
+      this.checkCanceled(meta.id)
+      const file = join(dir, `${track}.m4a`)
+      const pass = { track, index, count: tracks.length }
+      await this.transcribe(meta, settings, device, result, { input: file, audioOut: file, pass })
+    }
+  }
+
+  private async transcribe(
+    meta: HistoryMeta,
+    settings: Settings,
+    device: Device,
+    result: JobResult,
+    source: { input: string; audioOut: string; pass: TrackPass | null }
+  ): Promise<void> {
     await this.deps.worker.request(
       {
         cmd: 'transcribe',
         params: {
           job_id: meta.id,
-          input_path: meta.sourcePath,
+          input_path: source.input,
           language: languageOf(settings),
-          audio_out_path: this.deps.history.paths(meta.id).audio
+          audio_out_path: source.audioOut
         }
       },
       {
         device,
         onEvent: (event) => {
-          this.onJobEvent(meta.id, event, result)
+          this.onJobEvent(meta.id, event, result, source.pass)
         }
       }
     )
-    return result
   }
 
   /** `configured` escolhe a engine (gpu → whisper.cpp com modelo GGML); `device` é onde roda. */
-  private async loadModel(model: ModelId, device: Device, configured: Device): Promise<void> {
+  private async loadModel(
+    model: ModelId,
+    device: Device,
+    configured: Device,
+    processDevice: Device = device
+  ): Promise<void> {
     const format = formatForDevice(configured)
     const model_dir = this.deps.modelDir(model, format)
     const cuda = device === 'cuda'
@@ -327,10 +420,15 @@ export class TranscriptionQueue {
             compute_type: cuda ? ('float16' as const) : ('int8' as const),
             ...(cuda ? { cuda_lib_dir: this.deps.cudaLibDir } : {})
           }
-    await this.deps.worker.request({ cmd: 'load_model', params }, { device })
+    await this.deps.worker.request({ cmd: 'load_model', params }, { device: processDevice })
   }
 
-  private onJobEvent(jobId: string, event: JobEvent, result: JobResult): void {
+  private onJobEvent(
+    jobId: string,
+    event: JobEvent,
+    result: JobResult,
+    pass: TrackPass | null
+  ): void {
     switch (event.type) {
       case 'phase':
         this.deps.emit({ type: 'phase', jobId, phase: event.phase })
@@ -339,21 +437,27 @@ export class TranscriptionQueue {
         this.deps.emit({
           type: 'progress',
           jobId,
-          pct: event.pct,
+          pct: pass ? (pass.index * 100 + event.pct) / pass.count : event.pct,
           processedS: event.processed_s,
           totalS: event.total_s,
           speed: event.speed
         })
         return
       case 'segment': {
-        const segment = { start: event.start, end: event.end, text: event.text }
+        const segment = {
+          start: event.start,
+          end: event.end,
+          text: event.text,
+          ...(pass ? { speaker: pass.track } : {})
+        }
         this.writes = this.writes.then(() => this.deps.history.appendSegment(jobId, segment))
         this.deps.emit({ type: 'segment', jobId, segment })
         return
       }
       case 'done':
-        result.duration = event.duration
-        result.languageDetected = event.language_detected
+        // Várias faixas: a sessão dura o que dura a mais longa.
+        result.duration = Math.max(result.duration ?? 0, event.duration)
+        result.languageDetected ??= event.language_detected
     }
   }
 

@@ -61,6 +61,19 @@ describe('isAllowedExternalUrl', () => {
     expect(isAllowedExternalUrl('https://www.electronjs.org/', extra)).toBe(true)
     expect(isAllowedExternalUrl('https://www.electronjs.org/outra', extra)).toBe(false)
   })
+
+  it('abre só as páginas de permissão do microfone do macOS e do Windows', () => {
+    expect(
+      isAllowedExternalUrl(
+        'x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone'
+      )
+    ).toBe(true)
+    expect(isAllowedExternalUrl('ms-settings:privacy-microphone')).toBe(true)
+    expect(isAllowedExternalUrl('ms-settings:windowsupdate')).toBe(false)
+    expect(isAllowedExternalUrl('x-apple.systempreferences:com.apple.preference.security')).toBe(
+      false
+    )
+  })
 })
 
 describe('isTrustedSender', () => {

@@ -1,10 +1,22 @@
 """Comandos recebidos pelo stdin (validados) e escrita thread-safe de eventos no stdout."""
 
+import base64
+import binascii
 import json
 import threading
 from typing import Annotated, Literal, TextIO
 
-from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, ValidationError, model_validator
+import numpy as np
+from numpy.typing import NDArray
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    TypeAdapter,
+    ValidationError,
+    field_validator,
+    model_validator,
+)
 
 from transcriber_worker.errors import ErrorCode, WorkerError
 from transcriber_worker.events import Event
@@ -12,6 +24,7 @@ from transcriber_worker.events import Event
 Device = Literal["cpu", "cuda", "gpu"]
 EngineName = Literal["faster-whisper", "whisper-cpp"]
 ComputeType = Literal["int8", "float16"]
+Track = Literal["voce", "outros"]
 MAX_LINE_LENGTH = 64 * 1024
 
 
@@ -44,6 +57,51 @@ class TranscribeParams(_Strict):
     audio_out_path: str = Field(min_length=1)
 
 
+class LiveStartParams(_Strict):
+    session_id: str = Field(min_length=1)
+    tracks: list[Track] = Field(min_length=1, max_length=2)
+    language: str | None = Field(default=None, pattern=r"^[a-z]{2,3}$")
+    pause_s: float = Field(ge=0.5, le=3.0)
+    test: bool = False
+
+    @field_validator("tracks")
+    @classmethod
+    def _unique(cls, tracks: list[Track]) -> list[Track]:
+        if len(set(tracks)) != len(tracks):
+            raise ValueError("faixas repetidas")
+        return tracks
+
+
+class LiveAudioParams(_Strict):
+    session_id: str = Field(min_length=1)
+    track: Track
+    seq: int = Field(ge=0)
+    pcm16_b64: str
+
+    @field_validator("pcm16_b64")
+    @classmethod
+    def _pcm(cls, value: str) -> str:
+        try:
+            raw = base64.b64decode(value, validate=True)
+        except (binascii.Error, ValueError) as exc:  # formato inválido ou fora do ASCII
+            raise ValueError("pcm16_b64 inválido") from exc
+        if len(raw) % 2:
+            raise ValueError("pcm16 com número ímpar de bytes")
+        return value
+
+    def samples(self) -> NDArray[np.int16]:
+        return np.frombuffer(base64.b64decode(self.pcm16_b64), dtype="<i2").astype(np.int16)
+
+
+class LiveStopParams(_Strict):
+    session_id: str = Field(min_length=1)
+
+
+class LiveFinalizeParams(_Strict):
+    dir: str = Field(min_length=1)
+    tracks: list[Track] = Field(min_length=1, max_length=2)
+
+
 class LoadModelCommand(_Strict):
     id: str = Field(min_length=1)
     cmd: Literal["load_model"]
@@ -66,8 +124,46 @@ class ShutdownCommand(_Strict):
     cmd: Literal["shutdown"]
 
 
+class LiveStartCommand(_Strict):
+    id: str = Field(min_length=1)
+    cmd: Literal["live_start"]
+    params: LiveStartParams
+
+
+class LiveAudioCommand(_Strict):
+    id: str = Field(min_length=1)
+    cmd: Literal["live_audio"]
+    params: LiveAudioParams
+
+
+class LiveStopCommand(_Strict):
+    id: str = Field(min_length=1)
+    cmd: Literal["live_stop"]
+    params: LiveStopParams
+
+
+class LivePauseCommand(_Strict):
+    id: str = Field(min_length=1)
+    cmd: Literal["live_pause"]
+    params: LiveStopParams  # só o session_id
+
+
+class LiveFinalizeCommand(_Strict):
+    id: str = Field(min_length=1)
+    cmd: Literal["live_finalize"]
+    params: LiveFinalizeParams
+
+
 Command = Annotated[
-    LoadModelCommand | TranscribeCommand | SelfTestCommand | ShutdownCommand,
+    LoadModelCommand
+    | TranscribeCommand
+    | SelfTestCommand
+    | ShutdownCommand
+    | LiveStartCommand
+    | LiveAudioCommand
+    | LiveStopCommand
+    | LivePauseCommand
+    | LiveFinalizeCommand,
     Field(discriminator="cmd"),
 ]
 _COMMAND_ADAPTER: TypeAdapter[Command] = TypeAdapter(Command)

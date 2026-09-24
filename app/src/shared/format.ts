@@ -1,10 +1,20 @@
 import { toTranscriptEntry, type Segment, type TranscriptEntry } from './history'
+import type { Track } from './settings'
 
 export interface Paragraph {
   start: number
   end: number
   text: string
+  falante?: Track
 }
+
+/** Rótulos traduzidos dos falantes do ao vivo ("Você", "Outros"). */
+export type SpeakerLabels = Record<Track, string>
+
+export const speakerPrefix = (
+  falante: Track | undefined,
+  labels: SpeakerLabels | undefined
+): string => (falante && labels ? `${labels[falante]}: ` : '')
 
 export const PARAGRAPH_PAUSE_S = 1.5
 export const PARAGRAPH_MAX_CHARS = 600
@@ -22,9 +32,12 @@ export function formatTime(seconds: number): string {
 }
 
 /** Idêntico ao `.txt` do CLI: `[inicio - fim] texto`, uma linha por trecho. */
-export function toTimestamped(entries: readonly TranscriptEntry[]): string {
+export function toTimestamped(entries: readonly TranscriptEntry[], labels?: SpeakerLabels): string {
   return entries
-    .map((entry) => `[${formatTime(entry.inicio)} - ${formatTime(entry.fim)}] ${entry.texto}\n`)
+    .map(
+      (entry) =>
+        `[${formatTime(entry.inicio)} - ${formatTime(entry.fim)}] ${speakerPrefix(entry.falante, labels)}${entry.texto}\n`
+    )
     .join('')
 }
 
@@ -37,7 +50,7 @@ export function toJson(entries: readonly TranscriptEntry[]): string {
   if (entries.length === 0) return '[]'
   const items = entries.map(
     (entry) =>
-      `    {\n        "inicio": ${pythonFloat(entry.inicio)},\n        "fim": ${pythonFloat(entry.fim)},\n        "texto": ${JSON.stringify(entry.texto)}\n    }`
+      `    {\n        "inicio": ${pythonFloat(entry.inicio)},\n        "fim": ${pythonFloat(entry.fim)},\n        "texto": ${JSON.stringify(entry.texto)}${entry.falante ? `,\n        "falante": "${entry.falante}"` : ''}\n    }`
   )
   return `[\n${items.join(',\n')}\n]`
 }
@@ -47,6 +60,7 @@ export function segmentsToEntries(segments: readonly Segment[]): TranscriptEntry
 }
 
 function startsNewParagraph(current: Paragraph, next: TranscriptEntry): boolean {
+  if (next.falante !== current.falante) return true // ao vivo: cada falante no seu parágrafo
   if (next.inicio - current.end >= PARAGRAPH_PAUSE_S) return true
   return current.text.length > PARAGRAPH_MAX_CHARS && SENTENCE_END.test(current.text)
 }
@@ -62,13 +76,19 @@ export function toParagraphs(entries: readonly TranscriptEntry[]): Paragraph[] {
       current.text = `${current.text} ${text}`
       current.end = entry.fim
     } else {
-      current = { start: entry.inicio, end: entry.fim, text }
+      current = newParagraph(entry, text)
       paragraphs.push(current)
     }
   }
   return paragraphs
 }
 
-export function paragraphsToText(paragraphs: readonly Paragraph[]): string {
-  return paragraphs.map((paragraph) => paragraph.text).join('\n\n')
+function newParagraph(entry: TranscriptEntry, text: string): Paragraph {
+  const paragraph: Paragraph = { start: entry.inicio, end: entry.fim, text }
+  if (entry.falante) paragraph.falante = entry.falante
+  return paragraph
+}
+
+export function paragraphsToText(paragraphs: readonly Paragraph[], labels?: SpeakerLabels): string {
+  return paragraphs.map((p) => `${speakerPrefix(p.falante, labels)}${p.text}`).join('\n\n')
 }
