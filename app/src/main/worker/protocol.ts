@@ -1,9 +1,9 @@
 import { z } from 'zod'
 import { AppError, isErrorCode } from '../../shared/errors'
 import { PHASES } from '../../shared/events'
-import type { Device } from '../../shared/settings'
+import { TRACKS, type Device, type Track } from '../../shared/settings'
 
-export const PROTOCOL_VERSION = 2
+export const PROTOCOL_VERSION = 3
 
 const ready = z.object({ type: z.literal('ready'), protocol: z.number(), version: z.string() })
 const heartbeat = z.object({ type: z.literal('heartbeat') })
@@ -48,6 +48,32 @@ const done = z.object({
   language_detected: z.string().nullable()
 })
 
+const track = z.enum(TRACKS)
+const liveSegment = z.object({
+  type: z.literal('live_segment'),
+  session_id: z.string(),
+  track,
+  start: z.number(),
+  end: z.number(),
+  text: z.string()
+})
+const liveListening = z.object({
+  type: z.literal('live_listening'),
+  session_id: z.string(),
+  track,
+  active: z.boolean()
+})
+const liveLag = z.object({
+  type: z.literal('live_lag'),
+  session_id: z.string(),
+  seconds: z.number()
+})
+const liveError = z.object({
+  type: z.literal('live_error'),
+  session_id: z.string(),
+  code: z.string()
+})
+
 export const WorkerEventSchema = z.discriminatedUnion('type', [
   ready,
   heartbeat,
@@ -56,11 +82,19 @@ export const WorkerEventSchema = z.discriminatedUnion('type', [
   phase,
   progress,
   segment,
-  done
+  done,
+  liveSegment,
+  liveListening,
+  liveLag,
+  liveError
 ])
 export type WorkerEvent = z.infer<typeof WorkerEventSchema>
 export type JobEvent = Extract<WorkerEvent, { type: 'phase' | 'progress' | 'segment' | 'done' }>
 export type WorkerErrorEvent = Extract<WorkerEvent, { type: 'error' }>
+export type LiveWorkerEvent = Extract<
+  WorkerEvent,
+  { type: 'live_segment' | 'live_listening' | 'live_lag' | 'live_error' }
+>
 
 export type WorkerCommand =
   | {
@@ -85,6 +119,23 @@ export type WorkerCommand =
     }
   | { cmd: 'self_test' }
   | { cmd: 'shutdown' }
+  | {
+      cmd: 'live_start'
+      params: {
+        session_id: string
+        tracks: Track[]
+        language: string | null
+        pause_s: number
+        test?: boolean
+      }
+    }
+  | {
+      cmd: 'live_audio'
+      params: { session_id: string; track: Track; seq: number; pcm16_b64: string }
+    }
+  | { cmd: 'live_stop'; params: { session_id: string } }
+  | { cmd: 'live_pause'; params: { session_id: string } }
+  | { cmd: 'live_finalize'; params: { dir: string; tracks: Track[] } }
 
 export function parseWorkerEvent(line: string): WorkerEvent | null {
   let data: unknown

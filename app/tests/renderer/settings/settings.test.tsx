@@ -1,4 +1,4 @@
-import { act, screen, within } from '@testing-library/react'
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { AboutSection } from '../../../src/renderer/src/screens/settings/AboutSection'
 import { SettingsScreen } from '../../../src/renderer/src/screens/settings/SettingsScreen'
@@ -468,5 +468,30 @@ describe('Transcrição — GPU pelo whisper.cpp (Vulkan/Metal)', () => {
     await user.click(await screen.findByRole('radio', { name: /GPU \(Intel/ }))
     expect(api.models.install).not.toHaveBeenCalled()
     expect(api.settings.update).toHaveBeenCalledWith({ device: 'gpu' })
+  })
+})
+
+describe('Ao vivo', () => {
+  it('microfone padrão, áudio do computador e pausa', async () => {
+    const { user, api, container } = await open('live')
+    const select = screen.getByLabelText('Microfone')
+    await waitFor(() => {
+      expect(within(select).getAllByRole('option')).toHaveLength(2) // padrão + USB (sem monitor)
+    })
+    await user.selectOptions(select, 'mic1')
+    expect(api.settings.update).toHaveBeenLastCalledWith({
+      live: { micDeviceId: 'mic1', systemAudio: true, pauseS: 1 }
+    })
+    await user.click(screen.getByRole('switch', { name: 'Áudio do computador (Outros)' }))
+    expect(api.settings.update).toHaveBeenLastCalledWith({
+      live: { micDeviceId: 'mic1', systemAudio: false, pauseS: 1 }
+    })
+    fireEvent.change(screen.getByRole('slider', { name: 'Pausa que fecha uma frase' }), {
+      target: { value: '2.5' }
+    })
+    expect(api.settings.update).toHaveBeenLastCalledWith({
+      live: { micDeviceId: 'mic1', systemAudio: false, pauseS: 2.5 }
+    })
+    await expectAccessible(container)
   })
 })

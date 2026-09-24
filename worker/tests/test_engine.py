@@ -218,3 +218,38 @@ def test_whisper_cpp_runtime_gpu_errors_are_classified_by_device(
     with pytest.raises(WorkerError) as info:
         engine.transcribe("/v", "pt", "j", lambda _: None)
     assert info.value.code is code
+
+
+def test_transcribe_array_faster_whisper() -> None:
+    model = FakeModel([seg(0.0, 1.2, " oi"), seg(1.2, 2.0, "tudo bem")])
+    engine = Engine(factory=lambda *_: model, prepare=lambda _: None)
+    engine.load(CPU)
+    audio = np.zeros(32000, np.float32)
+    assert engine.transcribe_array(audio, "pt") == [(0.0, 1.2, " oi"), (1.2, 2.0, "tudo bem")]
+    got_audio, kwargs = model.calls[0]
+    assert got_audio is audio
+    assert kwargs["language"] == "pt"
+    assert kwargs["vad_filter"] is False  # o recorte já foi feito pelo ao vivo
+
+
+def test_transcribe_array_whisper_cpp_e_erro_de_gpu() -> None:
+    cpp = FakeCppModel([(0.0, 1.0, "olá")])
+    engine = Engine(cpp_factory=lambda *_: cpp, prepare=lambda _: None)
+    engine.load(CPP_GPU)
+    assert engine.transcribe_array(np.zeros(16000, np.float32), None) == [(0.0, 1.0, "olá")]
+
+    class Broken(FakeCppModel):
+        def transcribe(self, audio: Any, language: str | None, on_segment: Any) -> str | None:
+            raise RuntimeError("ggml_vulkan: device lost")
+
+    engine = Engine(cpp_factory=lambda *_: Broken([]), prepare=lambda _: None)
+    engine.load(CPP_GPU)
+    with pytest.raises(WorkerError) as info:
+        engine.transcribe_array(np.zeros(16000, np.float32), None)
+    assert info.value.code is ErrorCode.GPU_FAILED
+
+
+def test_transcribe_array_sem_modelo() -> None:
+    with pytest.raises(WorkerError) as info:
+        Engine().transcribe_array(np.zeros(1, np.float32), None)
+    assert info.value.code is ErrorCode.MODEL_NOT_LOADED

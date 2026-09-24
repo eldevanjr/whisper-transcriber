@@ -117,3 +117,41 @@ describe('toParagraphs', () => {
     )
   })
 })
+
+describe('formatos com falante (ao vivo)', () => {
+  const labels = { voce: 'Você', outros: 'Outros' }
+  const conversa: TranscriptEntry[] = [
+    { inicio: 0, fim: 2, texto: 'Bom dia.', falante: 'outros' },
+    { inicio: 2.2, fim: 4, texto: 'Vamos começar?', falante: 'outros' },
+    { inicio: 4.3, fim: 6, texto: 'Pode ser.', falante: 'voce' }
+  ]
+
+  it('com tempos: rótulo do falante em cada linha', () => {
+    expect(toTimestamped(conversa, labels)).toBe(
+      '[00:00 - 00:02] Outros: Bom dia.\n[00:02 - 00:04] Outros: Vamos começar?\n[00:04 - 00:06] Você: Pode ser.\n'
+    )
+  })
+
+  it('parágrafos quebram na troca de falante e o texto leva o rótulo', () => {
+    const paragraphs = toParagraphs(conversa)
+    expect(paragraphs.map((p) => [p.falante, p.text])).toEqual([
+      ['outros', 'Bom dia. Vamos começar?'],
+      ['voce', 'Pode ser.']
+    ])
+    expect(paragraphsToText(paragraphs, labels)).toBe(
+      'Outros: Bom dia. Vamos começar?\n\nVocê: Pode ser.'
+    )
+  })
+
+  it('JSON inclui o falante', () => {
+    expect(toJson([conversa[2]!])).toBe(
+      '[\n    {\n        "inicio": 4.3,\n        "fim": 6.0,\n        "texto": "Pode ser.",\n        "falante": "voce"\n    }\n]'
+    )
+  })
+
+  it('sem falante (arquivos) nada muda, mesmo passando os rótulos', () => {
+    const entries = [{ inicio: 0, fim: 1, texto: 'Oi.' }]
+    expect(toTimestamped(entries, labels)).toBe('[00:00 - 00:01] Oi.\n')
+    expect(paragraphsToText(toParagraphs(entries), labels)).toBe('Oi.')
+  })
+})

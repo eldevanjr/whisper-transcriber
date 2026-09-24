@@ -9,7 +9,7 @@ import { FakeApi, makeMeta } from '../fake-api'
 import { expectAccessible, renderWithApp } from '../render'
 
 function detailOf(meta: HistoryMeta, patch: Partial<HistoryDetail> = {}): HistoryDetail {
-  return { meta, transcript: [], videoAvailable: true, ...patch }
+  return { meta, transcript: [], videoAvailable: true, hasRedo: false, ...patch }
 }
 
 function mediaOf(container: HTMLElement): HTMLMediaElement {

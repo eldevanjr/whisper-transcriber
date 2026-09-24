@@ -1,6 +1,6 @@
 // Com sandbox: true, este arquivo só pode importar 'electron' e módulos locais sem dependências.
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
-import { EVENTS, IPC, type IpcResult, type TranscriberApi } from '../shared/ipc'
+import { EVENTS, IPC, SEND, type IpcResult, type TranscriberApi } from '../shared/ipc'
 
 async function invoke<T>(channel: string, arg?: unknown): Promise<T> {
   const result = (await ipcRenderer.invoke(channel, arg)) as IpcResult<T>
@@ -41,7 +41,8 @@ export const api: TranscriberApi = {
     get: (id) => invoke(IPC.historyGet, id),
     clear: () => invoke(IPC.historyClear),
     stats: () => invoke(IPC.historyStats),
-    remove: (id) => invoke(IPC.historyRemove, id)
+    remove: (id) => invoke(IPC.historyRemove, id),
+    setVersion: (id, version) => invoke(IPC.historySetVersion, { id, version })
   },
   models: {
     status: (format) => invoke(IPC.modelsStatus, format),
@@ -74,7 +75,18 @@ export const api: TranscriberApi = {
     install: () => invoke(IPC.updatesInstall),
     onEvent: (callback) => subscribe(EVENTS.update, callback)
   },
-  app: { info: () => invoke(IPC.appInfo) }
+  app: { info: () => invoke(IPC.appInfo) },
+  live: {
+    capabilities: () => invoke(IPC.liveCapabilities),
+    start: (input) => invoke(IPC.liveStart, input),
+    stop: () => invoke(IPC.liveStop),
+    pause: () => invoke(IPC.livePause),
+    resume: () => invoke(IPC.liveResume),
+    sendAudio: (track, seq, pcm) => {
+      ipcRenderer.send(SEND.liveAudio, { track, seq, pcm })
+    },
+    onEvent: (callback) => subscribe(EVENTS.live, callback)
+  }
 }
 
 contextBridge.exposeInMainWorld('transcriber', api)

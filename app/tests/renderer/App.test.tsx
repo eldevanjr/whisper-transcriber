@@ -29,4 +29,12 @@ describe('App', () => {
     await user.click(screen.getByRole('button', { name: 'Voltar' }))
     expect(screen.getByText('Solte vídeos ou áudios aqui')).toBeInTheDocument()
   })
+
+  it('"Ao vivo" na barra lateral abre a tela do ao vivo e "Voltar" retorna', async () => {
+    const { user } = await renderWithApp(<App />, { init: false })
+    await user.click(await screen.findByRole('button', { name: 'Ao vivo' }))
+    expect(screen.getByRole('heading', { name: 'Ao vivo' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Voltar' }))
+    expect(screen.getByText('Solte vídeos ou áudios aqui')).toBeInTheDocument()
+  })
 })

@@ -49,7 +49,11 @@
       "downloadModel": "Descargar el modelo de nuevo"
     },
     "report": "Informar un problema",
-    "GPU_FAILED": "La GPU falló. La transcripción siguió en la CPU."
+    "GPU_FAILED": "La GPU falló. La transcripción siguió en la CPU.",
+    "LIVE_NOT_STARTED": "No hay ninguna sesión en vivo en curso.",
+    "LIVE_ACTIVE": "Ya hay una transcripción en vivo en curso.",
+    "QUEUE_BUSY": "Espera a que termine la cola (o cancela el archivo actual) para empezar en vivo.",
+    "MIC_DENIED": "Se denegó el acceso al micrófono."
   },
   "notices": {
     "cudaFallback": "La GPU falló; esta transcripción siguió en la CPU.",
@@ -173,7 +177,14 @@
     "json": "JSON",
     "empty": "No se reconoció habla en este archivo.",
     "emptyHint": "Si el archivo tiene habla, inténtalo de nuevo con un modelo más grande o con el idioma fijo (Configuración → Transcripción).",
-    "saved": "Archivo guardado."
+    "saved": "Archivo guardado.",
+    "listen": "Escuchar",
+    "all": "Todo",
+    "version": "Versión",
+    "redone": "Rehecha",
+    "liveVersion": "En vivo",
+    "liveNote": "Transcrita en vivo. Rehacerla con el audio completo suele ser más precisa.",
+    "redoLive": "Rehacer con el audio completo"
   },
   "settings": {
     "title": "Configuración",
@@ -181,6 +192,7 @@
     "sections": {
       "general": "General",
       "transcription": "Transcripción",
+      "live": "En vivo",
       "storage": "Almacenamiento",
       "help": "Ayuda",
       "about": "Acerca de",
@@ -294,5 +306,47 @@
       "noGpu": "No se encontró una tarjeta gráfica compatible en esta computadora. La transcripción usa el procesador (CPU): funciona normalmente, solo que más lento.",
       "unsupported": "Este sistema no admite la aceleración por GPU. La transcripción usa el procesador (CPU): funciona normalmente, solo que más lento."
     }
+  },
+  "live": {
+    "open": "En vivo",
+    "title": "En vivo",
+    "sources": "Fuentes de audio",
+    "transcription": "Transcripción",
+    "mic": "Micrófono",
+    "defaultMic": "Predeterminado del sistema",
+    "unnamedMic": "Micrófono {{n}}",
+    "level": "Nivel: {{name}}",
+    "you": "Tú",
+    "others": "Otros",
+    "systemAudio": "Audio del equipo (Otros)",
+    "systemAudioHint": "Lo que suena en el equipo, como las voces de la llamada.",
+    "systemUnavailable": "No disponible en este sistema.",
+    "systemNotNow": "No se pudo capturar el audio del equipo ahora; la sesión sigue solo con el micrófono.",
+    "pause": "Pausa que cierra una frase",
+    "pauseValue": "{{value}} s",
+    "pauseHint": "Menor: el texto aparece antes. Mayor: frases más completas. 1,0 s sirve para conversaciones.",
+    "test": "Probar",
+    "stopTest": "Detener la prueba",
+    "preview": "Vista previa de la prueba",
+    "testHint": "Di algo: el texto aparece aquí y nada se guarda en el historial.",
+    "start": "Iniciar",
+    "busy": "Espera a que termine la transcripción de la cola o cancélala para empezar.",
+    "rec": "REC",
+    "paused": "En pausa",
+    "pauseSession": "Pausar",
+    "resume": "Reanudar",
+    "stop": "Terminar",
+    "stopping": "Terminando…",
+    "conversation": "Conversación",
+    "empty": "Empieza a hablar: el texto aparece aquí después de cada frase.",
+    "listening": "escuchando ({{name}})",
+    "lag": "Transcripción {{seconds}} s detrás del habla",
+    "lagHint": "El equipo no da abasto: en la configuración, usa la GPU o un modelo más pequeño. La grabación sigue completa.",
+    "deviceLost": "El micrófono se desconectó. La sesión está en pausa y lo grabado está guardado.",
+    "deviceLostHint": "Elige un micrófono o reconecta el mismo y reanuda.",
+    "reconnect": "Reconectar",
+    "permission": "Abrir los permisos del sistema",
+    "retry": "Intentar de nuevo",
+    "defaultTitle": "Reunión {{date}}"
   }
 }

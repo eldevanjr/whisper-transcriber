@@ -1,13 +1,14 @@
 import { vi } from 'vitest'
 import type {
   DownloadEvent,
+  LiveEvent,
   QueueEvent,
   SystemInfo,
   UpdateEvent,
   UpdateInfo
 } from '../../src/shared/events'
 import type { HistoryMeta } from '../../src/shared/history'
-import type { AppInfo, HistoryDetail, TranscriberApi } from '../../src/shared/ipc'
+import type { AppInfo, HistoryDetail, LiveCapabilities, TranscriberApi } from '../../src/shared/ipc'
 import type { ModelId } from '../../src/shared/models'
 import { DEFAULT_SETTINGS, type Settings } from '../../src/shared/settings'
 
@@ -28,6 +29,7 @@ export function makeMeta(patch: Partial<HistoryMeta> = {}): HistoryMeta {
     model: 'medium',
     language: 'pt',
     languageDetected: 'pt',
+    kind: 'file',
     duration: 125,
     error: null,
     ...patch
@@ -92,7 +94,8 @@ export class FakeApi implements TranscriberApi {
       this.queueListeners.size +
       this.downloadListeners.size +
       this.settingsListeners.size +
-      this.updateListeners.size
+      this.updateListeners.size +
+      this.liveListeners.size
     )
   }
 
@@ -128,11 +131,17 @@ export class FakeApi implements TranscriberApi {
       const meta = this.entries.find((entry) => entry.id === id)
       if (detail) return Promise.resolve(detail)
       if (!meta) return Promise.reject(apiError('NOT_FOUND', 'não encontrado'))
-      return Promise.resolve({ meta, transcript: [], videoAvailable: true })
+      return Promise.resolve({ meta, transcript: [], videoAvailable: true, hasRedo: false })
     }),
     clear: vi.fn(() => Promise.resolve({ count: this.entries.length, bytes: 1000 })),
     stats: vi.fn(() => Promise.resolve({ count: this.entries.length, bytes: 52_428_800 })),
-    remove: vi.fn(() => Promise.resolve(null))
+    remove: vi.fn(() => Promise.resolve(null)),
+    setVersion: vi.fn((id: string, version: 'live' | 'redo') => {
+      const meta = this.entries.find((entry) => entry.id === id) ?? makeMeta({ id })
+      const updated = { ...meta, activeVersion: version }
+      this.emitQueue({ type: 'job', meta: updated })
+      return Promise.resolve(updated)
+    })
   }
 
   models = {
@@ -177,6 +186,23 @@ export class FakeApi implements TranscriberApi {
   }
 
   private readonly updateListeners = new Set<Listener<UpdateEvent>>()
+  private readonly liveListeners = new Set<Listener<LiveEvent>>()
+
+  emitLive(event: LiveEvent): void {
+    for (const listener of this.liveListeners) listener(event)
+  }
+
+  live = {
+    capabilities: vi.fn((): Promise<LiveCapabilities> =>
+      Promise.resolve({ systemAudio: 'monitor' })
+    ),
+    start: vi.fn(() => Promise.resolve({ sessionId: 's1', itemId: null as string | null })),
+    stop: vi.fn(() => Promise.resolve(null as HistoryMeta | null)),
+    pause: vi.fn(() => Promise.resolve(null)),
+    resume: vi.fn(() => Promise.resolve(null)),
+    sendAudio: vi.fn(),
+    onEvent: (callback: Listener<LiveEvent>) => subscribe(this.liveListeners, callback)
+  }
 
   emitUpdate(event: UpdateEvent): void {
     for (const listener of this.updateListeners) listener(event)

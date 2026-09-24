@@ -19,3 +19,13 @@ export function licenseUrls(licenses: readonly ThirdPartyLicense[]): Set<string>
   }
   return urls
 }
+
+/** Páginas do sistema com a permissão do microfone (o Linux não pede permissão). */
+export const MIC_PERMISSION_URLS = {
+  darwin: 'x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone',
+  win32: 'ms-settings:privacy-microphone'
+} as const
+
+export function micPermissionUrl(platform: string): string | null {
+  return platform === 'darwin' || platform === 'win32' ? MIC_PERMISSION_URLS[platform] : null
+}

@@ -1,7 +1,7 @@
-import type { ErrorInfo } from './errors'
+import type { ErrorCode, ErrorInfo } from './errors'
 import type { HistoryMeta, Segment } from './history'
 import type { ModelFormat, ModelId } from './models'
-import type { Device } from './settings'
+import type { Device, Track } from './settings'
 
 export const PHASES = ['loading_model', 'extracting_audio', 'transcribing'] as const
 export type Phase = (typeof PHASES)[number]
@@ -83,3 +83,13 @@ export interface EnqueueResult {
   accepted: HistoryMeta[]
   rejected: string[]
 }
+
+/** Estado da sessão ao vivo (a tela mostra REC, pausa, encerrando). */
+export type LiveState = 'idle' | 'starting' | 'recording' | 'paused' | 'stopping'
+
+export type LiveEvent =
+  | { type: 'state'; state: LiveState; test: boolean; itemId: string | null }
+  | { type: 'segment'; track: Track; start: number; end: number; text: string }
+  | { type: 'listening'; track: Track; active: boolean }
+  | { type: 'lag'; seconds: number }
+  | { type: 'error'; code: ErrorCode }

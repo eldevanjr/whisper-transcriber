@@ -14,9 +14,9 @@ class FakeModel:
         self.segments = segments
         self.duration = duration
         self.language = language
-        self.calls: list[tuple[str, dict[str, Any]]] = []
+        self.calls: list[tuple[Any, dict[str, Any]]] = []
 
-    def transcribe(self, audio: str, **kwargs: Any) -> tuple[Iterable[Any], Any]:
+    def transcribe(self, audio: Any, **kwargs: Any) -> tuple[Iterable[Any], Any]:
         self.calls.append((audio, kwargs))
         info = SimpleNamespace(duration=self.duration, language=self.language)
         return iter(self.segments), info

@@ -7,6 +7,8 @@ e [whisper.cpp](https://github.com/ggml-org/whisper.cpp) (GPU por Vulkan ou Meta
 - Arraste vídeos ou áudios para a janela; a fila transcreve um por vez.
 - Os trechos aparecem ao vivo, como num chat, sincronizados com o player.
 - Resultado em **Texto** (parágrafos), **Com tempos** e **JSON**, com Copiar e Baixar.
+- **Ao vivo** para reuniões e chamadas: transcreve o microfone ("Você") e o áudio do computador
+  ("Outros") frase a frase, grava tudo e deixa refazer com o áudio completo depois.
 - Histórico com o áudio salvo; GPU NVIDIA (CUDA), AMD/Intel (Vulkan) ou Apple Silicon (Metal).
 - Interface em português, inglês e espanhol; temas claro, escuro ou do sistema.
 
@@ -23,9 +25,25 @@ e [whisper.cpp](https://github.com/ggml-org/whisper.cpp) (GPU por Vulkan ou Meta
 
 ![Configurações de transcrição: modelos, idioma do áudio e processamento na CPU ou GPU](docs/screenshots/04-configuracoes.png)
 
+### Ao vivo (reuniões e chamadas)
+
+![Sessão ao vivo: a conversa em balões, Outros à esquerda e Você à direita, com o tempo de cada fala](docs/screenshots/07-ao-vivo.png)
+
+- **Preparar e testar:** escolha o microfone, veja os medidores de nível e clique em **Testar**
+  para ver o texto aparecer sem salvar nada.
+- **Frase a frase:** o texto sai quando há uma pausa (1,0 s por padrão, ajustável de 0,5 a 3 s
+  em Configurações → Ao vivo) ou a cada 25 s de fala contínua, sem picotar palavras.
+- **Duas faixas:** o microfone ("Você") e o áudio do computador ("Outros") são transcritos
+  separadamente. O áudio do computador funciona no Windows, no Linux (PipeWire/PulseAudio) e no
+  macOS 14.2 ou mais novo; sem ele, a sessão segue só com o microfone.
+- **Gravado:** ao encerrar, a sessão vira um item do histórico com o player (Tudo, Você ou
+  Outros). **Refazer com o áudio completo** transcreve as faixas inteiras, que costuma ficar mais
+  preciso, e a versão ao vivo continua guardada (**Versão: Refeita · Ao vivo**).
+
 <sub>Mídias das capturas, todas em domínio público: discurso de John F. Kennedy na Rice University
 (1962) e vídeo da NASA sobre a tripulação da Artemis II, via Wikimedia Commons; contos
-"Miss Dollar" e "O relógio de ouro", de Machado de Assis, na leitura do LibriVox.</sub>
+"Miss Dollar" e "O relógio de ouro", de Machado de Assis, na leitura do LibriVox. A conversa
+da captura do ao vivo é fictícia.</sub>
 
 ## Instalação
 

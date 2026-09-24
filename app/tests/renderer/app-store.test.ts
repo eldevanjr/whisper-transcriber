@@ -29,7 +29,7 @@ describe('createAppStore', () => {
 
   it('o unsubscribe devolvido por init remove todos os ouvintes', async () => {
     const { api, stop } = await ready()
-    expect(api.listenerCount()).toBe(3)
+    expect(api.listenerCount()).toBe(4)
     stop()
     expect(api.listenerCount()).toBe(0)
   })
@@ -42,7 +42,8 @@ describe('createAppStore', () => {
     api.details.set(job.id, {
       meta: job,
       transcript: [{ inicio: 0, fim: 1, texto: 'já veio' }],
-      videoAvailable: true
+      videoAvailable: true,
+      hasRedo: false
     })
     const { state } = await ready(api)
     expect(state().queue.current).toBe(job.id)
@@ -80,7 +81,8 @@ describe('createAppStore', () => {
         { inicio: 0, fim: 1, texto: 'a' },
         { inicio: 1, fim: 2, texto: 'b' }
       ],
-      videoAvailable: true
+      videoAvailable: true,
+      hasRedo: false
     })
     const get = api.history.get.getMockImplementation()!
     api.history.get.mockImplementation(

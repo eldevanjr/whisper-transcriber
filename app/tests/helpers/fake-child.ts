@@ -39,7 +39,7 @@ export class FakeChild extends EventEmitter {
     this.stdout.write(`${JSON.stringify(event)}\n`)
   }
 
-  ready(version = '0.1.0', protocol = 2): void {
+  ready(version = '0.1.0', protocol = 3): void {
     this.send({ type: 'ready', protocol, version })
   }
 

@@ -7,12 +7,14 @@ import { AboutSection } from './AboutSection'
 import { GeneralSection } from './GeneralSection'
 import { HelpSection } from './HelpSection'
 import { LicensesSection } from './LicensesSection'
+import { LiveSection } from './LiveSection'
 import { StorageSection } from './StorageSection'
 import { TranscriptionSection } from './TranscriptionSection'
 
 const SECTIONS: readonly SettingsSection[] = [
   'general',
   'transcription',
+  'live',
   'storage',
   'help',
   'about',
@@ -27,6 +29,8 @@ function Content({ section }: { section: SettingsSection }) {
       return <GeneralSection settings={settings} />
     case 'transcription':
       return <TranscriptionSection settings={settings} />
+    case 'live':
+      return <LiveSection />
     case 'storage':
       return <StorageSection />
     case 'help':

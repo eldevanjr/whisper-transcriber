@@ -15,7 +15,8 @@ import {
 } from '../../shared/history'
 import { fileNameOf, type MediaKind } from '../../shared/media'
 import type { ModelId } from '../../shared/models'
-import { dirSize, isNotFound, readJson, writeJsonAtomic } from '../fs-utils'
+import type { Track } from '../../shared/settings'
+import { dirSize, isNotFound, pathExists, readJson, writeJsonAtomic } from '../fs-utils'
 
 export interface JobPaths {
   dir: string
@@ -23,11 +24,19 @@ export interface JobPaths {
   transcript: string
   partial: string
   audio: string
+  live: string // ao vivo: a transcrição feita na hora, guardada quando houver a refeita
 }
 
 export interface NewJob {
   sourcePath: string
   mediaKind: MediaKind
+  model: ModelId
+  language: string | null
+}
+
+export interface NewLiveSession {
+  title: string
+  tracks: Track[]
   model: ModelId
   language: string | null
 }
@@ -49,7 +58,8 @@ export class HistoryStore {
       meta: join(dir, 'meta.json'),
       transcript: join(dir, 'transcript.json'),
       partial: join(dir, 'transcript.partial.jsonl'),
-      audio: join(dir, 'audio.m4a')
+      audio: join(dir, 'audio.m4a'),
+      live: join(dir, 'transcript-live.json')
     }
   }
 
@@ -65,7 +75,30 @@ export class HistoryStore {
       language: job.language,
       languageDetected: null,
       duration: null,
-      error: null
+      error: null,
+      kind: 'file'
+    }
+    await writeJsonAtomic(this.paths(meta.id).meta, meta)
+    return meta
+  }
+
+  /** Sessão ao vivo: começa em processamento (a gravação e os trechos vêm enquanto dura). */
+  async createLive(session: NewLiveSession): Promise<HistoryMeta> {
+    const meta: HistoryMeta = {
+      id: this.newId(),
+      fileName: session.title,
+      sourcePath: '',
+      mediaKind: 'audio',
+      createdAt: this.now().toISOString(),
+      status: 'processing',
+      model: session.model,
+      language: session.language,
+      languageDetected: null,
+      duration: null,
+      error: null,
+      kind: 'live',
+      tracks: session.tracks,
+      activeVersion: 'live'
     }
     await writeJsonAtomic(this.paths(meta.id).meta, meta)
     return meta
@@ -116,26 +149,62 @@ export class HistoryStore {
   }
 
   async finalize(id: string): Promise<TranscriptEntry[]> {
-    const { partial, transcript } = this.paths(id)
-    const entries = (await readSegments(partial)).map(toTranscriptEntry)
-    await writeJsonAtomic(transcript, entries)
+    return this.finalizeTo(id, this.paths(id).transcript)
+  }
+
+  /** Ao vivo: só a versão ao vivo; `transcript.json` passa a existir quando houver a refeita. */
+  async finalizeLive(id: string): Promise<TranscriptEntry[]> {
+    return this.finalizeTo(id, this.paths(id).live)
+  }
+
+  private async finalizeTo(id: string, target: string): Promise<TranscriptEntry[]> {
+    const { partial } = this.paths(id)
+    // Refazer do ao vivo grava uma faixa depois da outra: aqui elas se intercalam por início.
+    const segments = (await readSegments(partial)).sort((a, b) => a.start - b.start)
+    const entries = segments.map(toTranscriptEntry)
+    await writeJsonAtomic(target, entries)
     await rm(partial, { force: true })
     return entries
   }
 
+  /** A versão que o item mostra: a refeita ou a ao vivo (itens ao vivo); a de sempre (arquivos). */
+  async readActive(meta: HistoryMeta): Promise<TranscriptEntry[]> {
+    const { live, transcript } = this.paths(meta.id)
+    const path = meta.kind === 'live' && meta.activeVersion !== 'redo' ? live : transcript
+    return this.readOrPartial(path, meta.id)
+  }
+
+  /**
+   * Antes de refazer um item ao vivo: as faixas precisam estar convertidas (m4a) e a versão ao
+   * vivo guardada, porque o refazer usa o parcial para a versão nova.
+   */
+  async prepareRedo(meta: HistoryMeta): Promise<void> {
+    const { dir, live } = this.paths(meta.id)
+    for (const track of meta.tracks ?? []) {
+      if (!(await pathExists(join(dir, `${track}.m4a`)))) {
+        throw new AppError('FILE_NOT_FOUND', 'A gravação desta sessão não está pronta', track)
+      }
+    }
+    if (!(await pathExists(live))) await this.finalizeLive(meta.id)
+  }
+
+  async hasRedo(meta: HistoryMeta): Promise<boolean> {
+    return meta.kind === 'live' && (await pathExists(this.paths(meta.id).transcript))
+  }
+
   /** Sem transcript.json (job em andamento ou interrompido), devolve o que já está no parcial. */
   async readTranscript(id: string): Promise<TranscriptEntry[]> {
-    const { transcript, partial } = this.paths(id)
-    let raw: unknown
+    return this.readOrPartial(this.paths(id).transcript, id)
+  }
+
+  private async readOrPartial(path: string, id: string): Promise<TranscriptEntry[]> {
+    const { partial } = this.paths(id)
     try {
-      raw = await readJson(transcript)
+      return await readEntries(path, id)
     } catch (error) {
       if (isNotFound(error)) return (await readSegments(partial)).map(toTranscriptEntry)
-      throw new AppError('INTERNAL', 'Transcrição corrompida', id)
+      throw error
     }
-    const parsed = TranscriptSchema.safeParse(raw)
-    if (!parsed.success) throw new AppError('INTERNAL', 'Transcrição corrompida', id)
-    return parsed.data
   }
 
   /** Só o texto parcial: o áudio extraído fica para reaproveitar ao refazer (cancelou, falhou). */
@@ -163,6 +232,20 @@ export class HistoryStore {
     await mkdir(this.root, { recursive: true })
     return stats
   }
+}
+
+/** JSON da transcrição validado; arquivo ausente propaga o ENOENT, o resto vira INTERNAL. */
+async function readEntries(path: string, id: string): Promise<TranscriptEntry[]> {
+  let raw: unknown
+  try {
+    raw = await readJson(path)
+  } catch (error) {
+    if (isNotFound(error)) throw error
+    throw new AppError('INTERNAL', 'Transcrição corrompida', id)
+  }
+  const parsed = TranscriptSchema.safeParse(raw)
+  if (!parsed.success) throw new AppError('INTERNAL', 'Transcrição corrompida', id)
+  return parsed.data
 }
 
 async function readSegments(path: string): Promise<Segment[]> {

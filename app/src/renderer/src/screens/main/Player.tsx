@@ -3,9 +3,12 @@ import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { formatTime } from '../../../../shared/format'
 import type { HistoryMeta } from '../../../../shared/history'
+import type { Track } from '../../../../shared/settings'
 import type { HistoryDetail } from '../../../../shared/ipc'
 import { MODEL_CATALOG } from '../../../../shared/models'
+import { Segmented } from '../../components/Segmented'
 import { usePlayer } from '../../hooks/usePlayer'
+import { useSpeakerLabels } from '../../hooks/useSpeakerLabels'
 import { useAppStore } from '../../providers'
 
 function languageName(code: string | null, locale: string): string | null {
@@ -52,11 +55,32 @@ function useFollowTranscription(meta: HistoryMeta): void {
   }, [processing, transcribing, processedS, follow])
 }
 
+type Source = 'audio' | Track
+
+/** Ao vivo com as duas faixas: ouvir a mistura ou só um lado da conversa. */
+function TrackChoice(props: { tracks: Track[]; value: Source; onChange: (s: Source) => void }) {
+  const { t } = useTranslation()
+  const labels = useSpeakerLabels()
+  if (props.tracks.length < 2) return null
+  return (
+    <Segmented<Source>
+      label={t('result.listen')}
+      value={props.value}
+      options={[
+        { value: 'audio', label: t('result.all') },
+        ...props.tracks.map((track) => ({ value: track, label: labels[track] }))
+      ]}
+      onChange={props.onChange}
+    />
+  )
+}
+
 /** Vídeo original quando existe e toca; senão o áudio salvo no histórico. */
 export function Player({ meta, detail }: { meta: HistoryMeta; detail: HistoryDetail | null }) {
   const { t, i18n } = useTranslation()
   const [videoFailed, setVideoFailed] = useState(false)
   const [audioFailed, setAudioFailed] = useState(false)
+  const [source, setSource] = useState<Source>('audio')
   const wantsVideo = meta.mediaKind === 'video'
   const showVideo = wantsVideo && detail?.videoAvailable !== false && !videoFailed
   useFollowTranscription(meta)
@@ -67,10 +91,11 @@ export function Player({ meta, detail }: { meta: HistoryMeta; detail: HistoryDet
         <h2 className="truncate text-lg font-semibold">{meta.fileName}</h2>
         <p className="text-sm text-muted">{describeMeta(meta, t, i18n.language)}</p>
       </header>
+      <TrackChoice tracks={meta.tracks ?? []} value={source} onChange={setSource} />
       <Media
         video={showVideo}
         // A URL muda com o status: o Chromium não reaproveita a falha de antes da extração.
-        src={`app-media://${meta.id}/${showVideo ? 'video' : 'audio'}?v=${meta.status}`}
+        src={`app-media://${meta.id}/${showVideo ? 'video' : source}?v=${meta.status}`}
         label={t('main.player.label', { name: meta.fileName })}
         onError={() => {
           if (showVideo) setVideoFailed(true)

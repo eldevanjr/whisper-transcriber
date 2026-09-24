@@ -11,7 +11,8 @@ PROGRESS_INTERVAL_S = 0.25
 
 
 class WhisperLike(Protocol):
-    def transcribe(self, audio: str, **kwargs: Any) -> tuple[Iterable[Any], Any]: ...
+    # Caminho do arquivo (fila) ou array float32 a 16 kHz (trechos do ao vivo).
+    def transcribe(self, audio: Any, **kwargs: Any) -> tuple[Iterable[Any], Any]: ...
 
 
 @dataclass(frozen=True)

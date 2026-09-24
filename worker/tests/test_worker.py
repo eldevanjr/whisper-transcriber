@@ -21,7 +21,7 @@ def test_emits_ready_then_handles_until_shutdown() -> None:
         '{"id":"3","cmd":"self_test"}\n',
     ]
     assert serve(lines, events.append, handler, version="9.9.9") == 0
-    assert events[0] == {"type": "ready", "protocol": 2, "version": "9.9.9"}
+    assert events[0] == {"type": "ready", "protocol": 3, "version": "9.9.9"}
     assert [c.id for c in handler.commands] == ["1", "2"]
 
 

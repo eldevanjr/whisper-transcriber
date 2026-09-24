@@ -19,7 +19,7 @@ async function setup(kind: 'video' | 'audio' = 'video') {
     language: 'pt'
   })
   await writeFile(history.paths(meta.id).audio, Buffer.from('audio'))
-  return { handler: createMediaHandler({ history }), meta, source }
+  return { handler: createMediaHandler({ history }), history, meta, source }
 }
 
 const get = (url: string, headers: Record<string, string> = {}) => new Request(url, { headers })
@@ -87,6 +87,17 @@ describe('createMediaHandler', () => {
     expect(response.status).toBe(200)
     expect(response.headers.get('x-media-fallback')).toBe('1')
     expect(await response.text()).toBe('audio')
+  })
+
+  it('faixas do ao vivo: /voce e /outros entregam cada lado', async () => {
+    const { handler, history, meta } = await setup()
+    const { dir } = history.paths(meta.id)
+    await writeFile(join(dir, 'voce.m4a'), Buffer.from('voce'))
+    const response = await handler(get(`app-media://${meta.id}/voce`))
+    expect(response.status).toBe(200)
+    expect(response.headers.get('Content-Type')).toBe('audio/mp4')
+    expect(await response.text()).toBe('voce')
+    expect((await handler(get(`app-media://${meta.id}/outros`))).status).toBe(404) // não gravada
   })
 
   it('item de áudio: /video também entrega o áudio salvo', async () => {
