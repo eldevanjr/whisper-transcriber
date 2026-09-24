@@ -35,6 +35,7 @@ import { getSystemInfo } from './system/info'
 import electronUpdater from 'electron-updater'
 import { createUpdater } from './updates'
 import windowIcon from '../../resources/icon.png?asset'
+import { integrateAppImage } from './linux-integration'
 import { createMainWindow } from './window'
 import { resolveWorkerCommand, workerEnv } from './worker/locate'
 import { WorkerSupervisor, type Logger } from './worker/supervisor'
@@ -217,6 +218,21 @@ async function main(): Promise<void> {
   await (rendererUrl ? window.loadURL(rendererUrl) : window.loadFile(indexHtml))
   await queue.restore()
   logger.info(`app pronto (versão ${app.getVersion()})`)
+  if (process.platform === 'linux') {
+    // AppImage: sem atalho .desktop o dock mostra um ícone genérico.
+    integrateAppImage({
+      appImage: process.env.APPIMAGE,
+      home: app.getPath('home'),
+      iconSource: windowIcon,
+      systemApplications: ['/usr/share/applications', '/usr/local/share/applications']
+    })
+      .then((result) => {
+        if (result === 'written') logger.info('[linux] atalho do AppImage criado ou atualizado')
+      })
+      .catch((error: unknown) => {
+        logger.warn(`[linux] não foi possível criar o atalho do AppImage: ${String(error)}`)
+      })
+  }
 
   app.on('second-instance', () => {
     window?.show()
