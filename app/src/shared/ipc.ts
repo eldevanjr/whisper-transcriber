@@ -51,7 +51,9 @@ export const IPC = {
   liveStop: 'live:stop',
   livePause: 'live:pause',
   liveResume: 'live:resume',
-  liveCapabilities: 'live:capabilities'
+  liveCapabilities: 'live:capabilities',
+  liveMonitorVolume: 'live:monitor-volume',
+  liveSetMonitorVolume: 'live:set-monitor-volume'
 } as const
 
 export const EVENTS = {
@@ -69,6 +71,15 @@ export const SEND = {
 
 export interface LiveCapabilities {
   systemAudio: 'loopback' | 'monitor' | 'unavailable'
+}
+
+/** Volume do monitor da saída padrão (Linux/PipeWire): de onde vem o áudio dos "Outros". */
+export interface MonitorVolume {
+  /** Nome da saída de áudio, como o sistema mostra. */
+  sink: string
+  /** 0–100, na escala dos mixers (pavucontrol). */
+  percent: number
+  muted: boolean
 }
 
 export interface LiveStartInput {
@@ -178,6 +189,9 @@ export interface TranscriberApi {
   live: {
     /** O que o sistema oferece para o áudio dos "Outros". */
     capabilities(): Promise<LiveCapabilities>
+    /** null fora do Linux ou sem PipeWire. */
+    monitorVolume(): Promise<MonitorVolume | null>
+    setMonitorVolume(percent: number): Promise<MonitorVolume | null>
     start(input: LiveStartInput): Promise<{ sessionId: string; itemId: string | null }>
     stop(): Promise<HistoryMeta | null>
     pause(): Promise<null>

@@ -154,6 +154,7 @@
     "progressExtract": "Audio extraction progress",
     "progressTimes": "{{processed}} of {{total}}",
     "remaining": "{{time}} left",
+    "trackPass": "{{name}} ({{n}} of {{count}})",
     "player": {
       "videoMissing": "Original video not found or not supported; playing the saved audio.",
       "unavailable": "The media is not available yet.",
@@ -163,6 +164,7 @@
     "chat": {
       "title": "Segments",
       "typing": "Transcribing…",
+      "laterTracks": "Redoing one track at a time: the Others’ segments come in when your track finishes, in conversation order.",
       "empty": "Segments appear here as the transcription progresses.",
       "seek": "Go to {{time}}"
     },
@@ -322,6 +324,17 @@
     "systemAudioHint": "What plays on the computer, such as the voices on the call.",
     "systemUnavailable": "Not available on this system.",
     "systemNotNow": "Could not capture the computer audio right now; the session continues with the microphone only.",
+    "monitorVolume": "Computer audio capture volume",
+    "monitorVolumeValue": "{{value}}%",
+    "monitorVolumeHint": "How much of the sound from “{{sink}}” reaches the Others transcript. It doesn’t change what you hear. This is a system setting, so it also applies to other apps that record this output.",
+    "monitorLowShort": "Too low: the Others’ voices will come through silent.",
+    "monitorLow": "Computer audio is coming through almost silent ({{value}}%): the Others’ voices won’t be transcribed.",
+    "monitorMuted": "Computer audio is muted for recording: the Others’ voices won’t be transcribed.",
+    "monitorLowHint": "The capture volume of “{{sink}}” was lowered in the system. You still hear everything normally; only the recording is affected.",
+    "monitorFix": "Set to 100%",
+    "noSignal": "No computer audio came through in the first {{seconds}} s.",
+    "noSignalHint": "If something is playing (the call, a video), its sound isn’t reaching the app: check that it plays through the system’s default audio output and that its volume isn’t at zero.",
+    "noSignalHintMac": "On macOS, also check that the app has Screen Recording permission in System Settings > Privacy & Security.",
     "pause": "Pause that ends a sentence",
     "pauseValue": "{{value}} s",
     "pauseHint": "Shorter: text shows up sooner. Longer: more complete sentences. 1.0 s works for conversations.",

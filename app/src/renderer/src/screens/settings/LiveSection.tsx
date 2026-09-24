@@ -3,6 +3,7 @@ import { SettingsCard } from '../../components/Fields'
 import { useInputDevices } from '../../hooks/useInputDevices'
 import { useLiveSupport } from '../../hooks/useLiveSupport'
 import { MicSelect, SystemAudioToggle } from '../live/LiveFields'
+import { MonitorVolumeSlider } from '../live/MonitorVolume'
 import { PauseSlider } from '../live/PauseSlider'
 
 /** Padrões do ao vivo: a tela de preparar começa com eles. */
@@ -15,6 +16,7 @@ export function LiveSection() {
       <SettingsCard title={t('live.sources')}>
         <MicSelect devices={devices} />
         <SystemAudioToggle support={support} />
+        {support !== 'unavailable' && <MonitorVolumeSlider />}
       </SettingsCard>
       <SettingsCard title={t('live.transcription')}>
         <PauseSlider />
