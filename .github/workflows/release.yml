@@ -72,8 +72,10 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ inputs.version }}
         run: |
-          gh release create "v$VERSION" --draft --verify-tag --title "v$VERSION" \
-            --notes "Instaladores da versão $VERSION." -R "$GITHUB_REPOSITORY"
+          # Rascunho que já existe (ex.: refazer só um instalador) é reaproveitado.
+          gh release view "v$VERSION" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1 ||
+            gh release create "v$VERSION" --draft --verify-tag --title "v$VERSION" \
+              --notes "Instaladores da versão $VERSION." -R "$GITHUB_REPOSITORY"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
       - name: Versão de teste (dry run)
         id: dry
