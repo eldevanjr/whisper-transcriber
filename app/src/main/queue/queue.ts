@@ -1,11 +1,11 @@
 import { stat } from 'node:fs/promises'
 import { isAbsolute, join } from 'node:path'
 import { AppError, toAppError } from '../../shared/errors'
-import type { EnqueueResult, QueueEvent, QueueState } from '../../shared/events'
+import type { EnqueueResult, QueueEvent, QueueState, TrackPass } from '../../shared/events'
 import type { HistoryMeta } from '../../shared/history'
 import { fileNameOf, mediaKindOf } from '../../shared/media'
 import { formatForDevice, type ModelFormat, type ModelId } from '../../shared/models'
-import type { Device, Settings, Track } from '../../shared/settings'
+import type { Device, Settings } from '../../shared/settings'
 import type { HistoryStore } from '../history/store'
 import type { JobEvent } from '../worker/protocol'
 import type { Logger, WorkerPort } from '../worker/supervisor'
@@ -35,11 +35,6 @@ interface JobResult {
 }
 
 /** Uma das faixas do refazer do ao vivo: o falante e a fatia do progresso total. */
-interface TrackPass {
-  track: Track
-  index: number
-  count: number
-}
 
 // Um abort nativo do driver/cuDNN derruba o processo: o supervisor vê WORKER_CRASHED.
 const GPU_FAILURES = new Set(['CUDA_FAILED', 'CUDA_UNAVAILABLE', 'GPU_FAILED', 'WORKER_CRASHED'])
@@ -56,6 +51,23 @@ async function isFileOnDisk(path: string): Promise<boolean> {
 }
 
 const canceledError = () => new AppError('CANCELED', 'Transcrição cancelada')
+
+/** Várias faixas: a barra soma as passadas; os tempos são da faixa em andamento. */
+function progressEvent(
+  jobId: string,
+  event: Extract<JobEvent, { type: 'progress' }>,
+  pass: TrackPass | null
+): QueueEvent {
+  return {
+    type: 'progress',
+    jobId,
+    pct: pass ? (pass.index * 100 + event.pct) / pass.count : event.pct,
+    processedS: event.processed_s,
+    totalS: event.total_s,
+    speed: event.speed,
+    ...(pass ? { pass } : {})
+  }
+}
 
 export class TranscriptionQueue {
   private readonly pending: string[] = []
@@ -434,14 +446,7 @@ export class TranscriptionQueue {
         this.deps.emit({ type: 'phase', jobId, phase: event.phase })
         return
       case 'progress':
-        this.deps.emit({
-          type: 'progress',
-          jobId,
-          pct: pass ? (pass.index * 100 + event.pct) / pass.count : event.pct,
-          processedS: event.processed_s,
-          totalS: event.total_s,
-          speed: event.speed
-        })
+        this.deps.emit(progressEvent(jobId, event, pass))
         return
       case 'segment': {
         const segment = {

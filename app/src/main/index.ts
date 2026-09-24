@@ -26,6 +26,7 @@ import { Installer } from './downloads/installer'
 import { parseManifest } from './downloads/manifest'
 import { HistoryStore } from './history/store'
 import { registerIpcHandlers, type Services } from './ipc/handlers'
+import { createMonitorVolume } from './live/monitor-volume'
 import { LiveService } from './live/session'
 import {
   allowPermission,
@@ -230,6 +231,10 @@ async function main(): Promise<void> {
     externalUrls: licenseUrls(licensesJson),
     live,
     liveCapabilities: () => ({ systemAudio: systemAudioSupport(process.platform, release()) }),
+    monitorVolume: createMonitorVolume({
+      platform: process.platform,
+      exec: (file, args, options) => execFileAsync(file, [...args], options)
+    }),
     appInfo: () => ({
       version: app.getVersion(),
       platform: process.platform,

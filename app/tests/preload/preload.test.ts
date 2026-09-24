@@ -75,6 +75,8 @@ describe('preload', () => {
       ],
       [() => api.live.stop(), IPC.liveStop, undefined],
       [() => api.live.capabilities(), IPC.liveCapabilities, undefined],
+      [() => api.live.monitorVolume(), IPC.liveMonitorVolume, undefined],
+      [() => api.live.setMonitorVolume(100), IPC.liveSetMonitorVolume, 100],
       [() => api.live.pause(), IPC.livePause, undefined],
       [() => api.live.resume(), IPC.liveResume, undefined]
     ]

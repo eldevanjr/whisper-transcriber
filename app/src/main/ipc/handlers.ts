@@ -8,6 +8,7 @@ import {
   type AppInfo,
   type IpcResult,
   type LiveCapabilities,
+  type MonitorVolume,
   type LiveStartInput
 } from '../../shared/ipc'
 import { formatForDevice, MODEL_FORMATS, MODEL_IDS } from '../../shared/models'
@@ -45,6 +46,10 @@ export interface Services {
   /** Links extras permitidos (páginas dos projetos em Licenças). */
   externalUrls: ReadonlySet<string>
   liveCapabilities(): LiveCapabilities
+  monitorVolume: {
+    read(): Promise<MonitorVolume | null>
+    set(percent: number): Promise<MonitorVolume | null>
+  }
   live: {
     start(input: LiveStartInput): Promise<{ sessionId: string; itemId: string | null }>
     stop(): Promise<HistoryMeta | null>
@@ -84,6 +89,7 @@ const LiveStartSchema = z.object({
   title: z.string().min(1).max(200)
 })
 const BLOCK_48K = 4800 // 100 ms a 48 kHz
+const PercentSchema = z.number().int().min(0).max(100)
 const LiveAudioSchema = z.object({
   track: TrackSchema,
   seq: z.number().int().min(0),
@@ -147,6 +153,8 @@ export function registerIpcHandlers(
 
 function registerLive(on: On, s: Services): void {
   on(IPC.liveCapabilities, None, () => s.liveCapabilities())
+  on(IPC.liveMonitorVolume, None, () => s.monitorVolume.read())
+  on(IPC.liveSetMonitorVolume, PercentSchema, (percent) => s.monitorVolume.set(percent))
   on(IPC.liveStart, LiveStartSchema, (input) => s.live.start(input))
   on(IPC.liveStop, None, () => s.live.stop())
   on(IPC.livePause, None, () => {

@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, type UIEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { formatTime } from '../../../../shared/format'
+import type { TrackPass } from '../../../../shared/events'
 import type { HistoryMeta, Segment } from '../../../../shared/history'
 import type { HistoryDetail } from '../../../../shared/ipc'
 import { Button } from '../../components/Button'
@@ -77,12 +78,32 @@ function FailureActions({ meta }: { meta: HistoryMeta }) {
   )
 }
 
+function Typing({ pass }: { pass: TrackPass | null }) {
+  const { t } = useTranslation()
+  return (
+    <>
+      <p role="status" className="flex items-center gap-2 text-sm text-muted">
+        <span className="flex gap-1" aria-hidden>
+          <span className="size-1.5 animate-bounce rounded-full bg-accent" />
+          <span className="size-1.5 animate-bounce rounded-full bg-accent [animation-delay:150ms]" />
+          <span className="size-1.5 animate-bounce rounded-full bg-accent [animation-delay:300ms]" />
+        </span>
+        {t('main.chat.typing')}
+      </p>
+      {pass && pass.index < pass.count - 1 && (
+        <p className="text-xs text-muted">{t('main.chat.laterTracks')}</p>
+      )}
+    </>
+  )
+}
+
 /** Trechos como balões de chat: ao vivo durante a transcrição, do parcial/transcrição depois. */
 export function ChatPanel({ meta, detail }: { meta: HistoryMeta; detail: HistoryDetail | null }) {
   const { t } = useTranslation()
   const titleId = useId()
   const processing = meta.status === 'processing'
   const live = useAppStore((s) => s.live[meta.id]?.segments ?? NO_SEGMENTS)
+  const pass = useAppStore((s) => s.live[meta.id]?.progress?.pass ?? null)
   const saved = detail?.transcript.map((e) => ({ start: e.inicio, end: e.fim, text: e.texto }))
   const segments = processing ? live : (saved ?? NO_SEGMENTS)
   const list = useRef<HTMLDivElement>(null)
@@ -117,16 +138,7 @@ export function ChatPanel({ meta, detail }: { meta: HistoryMeta; detail: History
       >
         <SegmentList segments={segments} />
       </div>
-      {processing && (
-        <p role="status" className="flex items-center gap-2 text-sm text-muted">
-          <span className="flex gap-1" aria-hidden>
-            <span className="size-1.5 animate-bounce rounded-full bg-accent" />
-            <span className="size-1.5 animate-bounce rounded-full bg-accent [animation-delay:150ms]" />
-            <span className="size-1.5 animate-bounce rounded-full bg-accent [animation-delay:300ms]" />
-          </span>
-          {t('main.chat.typing')}
-        </p>
-      )}
+      {processing && <Typing pass={pass} />}
     </section>
   )
 }

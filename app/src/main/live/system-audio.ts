@@ -2,15 +2,15 @@
  * Áudio do sistema ("Outros" no ao vivo): o que cada plataforma oferece.
  * - Windows: loopback nativo do Electron (getDisplayMedia + setDisplayMediaRequestHandler).
  * - macOS ≥ 14.2 (Darwin 23.2): o mesmo caminho com a feature MacLoopbackAudioForScreenShare.
- * - Linux: o "Monitor of …" do PipeWire/PulseAudio aparece como uma entrada de áudio comum.
+ * - Linux: o mesmo loopback, que o Chromium liga ao monitor da saída padrão do PipeWire/PulseAudio.
+ *   (O "Monitor of …" não serve como entrada comum: o Chromium o esconde de enumerateDevices.)
  */
 export type SystemAudioSupport = 'loopback' | 'monitor' | 'unavailable'
 
 export const MAC_LOOPBACK_FEATURE = 'MacLoopbackAudioForScreenShare'
 
 export function systemAudioSupport(platform: string, osRelease: string): SystemAudioSupport {
-  if (platform === 'win32') return 'loopback'
-  if (platform === 'linux') return 'monitor'
+  if (platform === 'win32' || platform === 'linux') return 'loopback'
   if (platform !== 'darwin') return 'unavailable'
   const [major = 0, minor = 0] = osRelease.split('.').map(Number)
   return major > 23 || (major === 23 && minor >= 2) ? 'loopback' : 'unavailable'
@@ -46,6 +46,8 @@ export function allowPermission(
 ): boolean {
   if (permission === 'display-capture') return true
   if (permission !== 'media') return false
+  // getDisplayMedia pede "media" sem tipos; o que ela entrega é o displayMediaHandler quem decide.
+  if (details.mediaTypes?.length === 0) return true
   const types = details.mediaTypes ?? (details.mediaType ? [details.mediaType] : [])
   return types.length > 0 && types.every((type) => type === 'audio')
 }

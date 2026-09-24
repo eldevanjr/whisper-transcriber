@@ -149,6 +149,35 @@ describe('ChatPanel', () => {
     { start: 2, end: 5, text: 'Segundo trecho' }
   ]
 
+  it('refazer do ao vivo: avisa que os Outros entram depois da primeira faixa', async () => {
+    const job = makeMeta({ status: 'processing' })
+    const api = new FakeApi()
+    api.entries = [job]
+    api.current = job.id
+    await renderWithApp(
+      <PlayerProvider>
+        <ChatPanel meta={job} detail={null} />
+      </PlayerProvider>,
+      { api }
+    )
+    const later = /os trechos dos Outros entram quando a sua faixa terminar/
+    expect(screen.queryByText(later)).not.toBeInTheDocument()
+    const progress = { type: 'progress' as const, jobId: job.id, processedS: 1, totalS: 10 }
+    act(() => {
+      api.emitQueue({ ...progress, pct: 5, speed: 1, pass: { track: 'voce', index: 0, count: 2 } })
+    })
+    expect(screen.getByText(later)).toBeInTheDocument()
+    act(() => {
+      api.emitQueue({
+        ...progress,
+        pct: 55,
+        speed: 1,
+        pass: { track: 'outros', index: 1, count: 2 }
+      })
+    })
+    expect(screen.queryByText(later)).not.toBeInTheDocument()
+  })
+
   it('ao vivo: balões com tempo, "digitando" e rolagem para o fim', async () => {
     const job = makeMeta({ status: 'processing' })
     const api = new FakeApi()

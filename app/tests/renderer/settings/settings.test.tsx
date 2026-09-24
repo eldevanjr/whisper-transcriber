@@ -494,4 +494,33 @@ describe('Ao vivo', () => {
     })
     await expectAccessible(container)
   })
+
+  it('volume de captura do áudio do computador (Linux): mostra, avisa quando baixo e ajusta', async () => {
+    const api = new FakeApi()
+    api.live.monitorVolume.mockResolvedValue({ sink: 'Fone USB', percent: 8, muted: false })
+    const { container } = await open('live', api)
+    const slider = await screen.findByRole('slider', {
+      name: 'Volume de captura do áudio do computador'
+    })
+    expect(slider).toHaveValue('8')
+    expect(screen.getByText(/Quanto do som de “Fone USB”/)).toBeInTheDocument()
+    expect(screen.getByText(/Baixo demais/)).toBeInTheDocument()
+    fireEvent.change(slider, { target: { value: '100' } })
+    await waitFor(() => {
+      expect(api.live.setMonitorVolume).toHaveBeenCalledTimes(1)
+    })
+    expect(api.live.setMonitorVolume).toHaveBeenCalledWith(100)
+    await waitFor(() => {
+      expect(screen.queryByText(/Baixo demais/)).not.toBeInTheDocument()
+    })
+    await expectAccessible(container)
+  })
+
+  it('sem PipeWire ou fora do Linux o volume de captura não aparece', async () => {
+    await open('live')
+    await screen.findByRole('slider', { name: 'Pausa que fecha uma frase' })
+    expect(
+      screen.queryByRole('slider', { name: 'Volume de captura do áudio do computador' })
+    ).not.toBeInTheDocument()
+  })
 })

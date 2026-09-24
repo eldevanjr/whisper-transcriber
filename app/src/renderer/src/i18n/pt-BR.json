@@ -154,6 +154,7 @@
     "progressExtract": "Progresso da extração do áudio",
     "progressTimes": "{{processed}} de {{total}}",
     "remaining": "faltam {{time}}",
+    "trackPass": "{{name}} ({{n}} de {{count}})",
     "player": {
       "videoMissing": "Vídeo original não encontrado ou não suportado; tocando o áudio salvo.",
       "unavailable": "A mídia ainda não está disponível.",
@@ -163,6 +164,7 @@
     "chat": {
       "title": "Trechos",
       "typing": "Transcrevendo…",
+      "laterTracks": "Refazendo uma faixa por vez: os trechos dos Outros entram quando a sua faixa terminar, na ordem da conversa.",
       "empty": "Os trechos aparecem aqui enquanto a transcrição anda.",
       "seek": "Ir para {{time}}"
     },
@@ -322,6 +324,17 @@
     "systemAudioHint": "O que toca no computador, como as vozes da chamada.",
     "systemUnavailable": "Não disponível neste sistema.",
     "systemNotNow": "Não foi possível capturar o áudio do computador agora; a sessão segue só com o microfone.",
+    "monitorVolume": "Volume de captura do áudio do computador",
+    "monitorVolumeValue": "{{value}}%",
+    "monitorVolumeHint": "Quanto do som de “{{sink}}” chega à transcrição dos Outros. Não muda o que você ouve. É uma configuração do sistema: vale também para outros programas que gravam essa saída.",
+    "monitorLowShort": "Baixo demais: as vozes dos Outros vão chegar mudas.",
+    "monitorLow": "O áudio do computador está chegando quase mudo ({{value}}%): as vozes dos Outros não vão ser transcritas.",
+    "monitorMuted": "O áudio do computador está silenciado para gravação: as vozes dos Outros não vão ser transcritas.",
+    "monitorLowHint": "O volume de captura de “{{sink}}” foi baixado no sistema. Você continua ouvindo normal; só a gravação é afetada.",
+    "monitorFix": "Ajustar para 100%",
+    "noSignal": "Nenhum som do computador chegou nos primeiros {{seconds}} s.",
+    "noSignalHint": "Se algo está tocando (a chamada, um vídeo), o som não está chegando ao app: confira se ele sai pela saída de áudio padrão do sistema e se o volume dele não está no zero.",
+    "noSignalHintMac": "No macOS, confira também se o app tem a permissão de Gravação de tela em Ajustes do Sistema > Privacidade e Segurança.",
     "pause": "Pausa que fecha uma frase",
     "pauseValue": "{{value}} s",
     "pauseHint": "Menor: o texto aparece antes. Maior: frases mais inteiras. 1,0 s serve para conversas.",

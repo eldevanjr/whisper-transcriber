@@ -74,6 +74,10 @@ function setup(settingsOverride: Partial<Settings> = {}) {
     appInfo: vi.fn(() => ({ version: '0.1.0', platform: 'linux', settingsRecovered: false })),
     externalUrls: new Set(['https://github.com/facebook/react']),
     liveCapabilities: vi.fn(() => ({ systemAudio: 'monitor' })),
+    monitorVolume: {
+      read: vi.fn(() => Promise.resolve({ sink: 'Fone', percent: 8, muted: false })),
+      set: vi.fn((percent: number) => Promise.resolve({ sink: 'Fone', percent, muted: false }))
+    },
     live: {
       start: vi.fn(() => Promise.resolve({ sessionId: 's', itemId: null })),
       stop: vi.fn(() => Promise.resolve(null)),
@@ -334,6 +338,20 @@ describe('IPC do ao vivo', () => {
     expect(services.live.stop).toHaveBeenCalled()
     expect(services.live.pause).toHaveBeenCalled()
     expect(services.live.resume).toHaveBeenCalled()
+  })
+
+  it('volume de captura do áudio do computador: lê e ajusta só com 0–100 inteiro', async () => {
+    const { call, services } = setup()
+    expect(await call(IPC.liveMonitorVolume)).toEqual(
+      ok({ sink: 'Fone', percent: 8, muted: false })
+    )
+    expect(await call(IPC.liveSetMonitorVolume, 100)).toEqual(
+      ok({ sink: 'Fone', percent: 100, muted: false })
+    )
+    for (const bad of [-1, 101, 50.5, '100', null]) {
+      expect(await call(IPC.liveSetMonitorVolume, bad)).toEqual(fail('INVALID_REQUEST'))
+    }
+    expect(services.monitorVolume.set).toHaveBeenCalledTimes(1)
   })
 
   it('blocos de áudio: só do app e só no formato certo (100 ms a 48 kHz)', () => {

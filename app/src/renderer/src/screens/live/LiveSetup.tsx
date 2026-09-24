@@ -13,6 +13,7 @@ import { AudioLanguageField } from '../settings/TranscriptionSection'
 import { LevelMeter } from './LevelMeter'
 import { MicSelect, SystemAudioToggle } from './LiveFields'
 import { Bubbles } from './LiveSession'
+import { SystemAudioWarning } from './MonitorVolume'
 import { PauseSlider } from './PauseSlider'
 
 function CaptureError({ error, onRetry }: { error: ErrorInfo; onRetry: () => void }) {
@@ -55,6 +56,7 @@ function Sources({ controller, locked }: { controller: LiveController; locked: b
       {wanted && tracks.length > 0 && !captured && (
         <p className="text-xs text-muted">{t('live.systemNotNow')}</p>
       )}
+      {captured && <SystemAudioWarning level={levels.outros} />}
     </SettingsCard>
   )
 }
