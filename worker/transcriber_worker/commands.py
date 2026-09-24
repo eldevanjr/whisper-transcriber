@@ -17,12 +17,14 @@ from transcriber_worker.events import (
     progress_event,
     result_event,
 )
+from transcriber_worker.live.finalize import finalize
 from transcriber_worker.live.segmenter import VadFn
 from transcriber_worker.live.session import LiveSession
 from transcriber_worker.live.vad import StreamingVad
 from transcriber_worker.protocol import (
     Command,
     LiveAudioCommand,
+    LiveFinalizeCommand,
     LiveStartCommand,
     LiveStopCommand,
     LoadModelCommand,
@@ -75,6 +77,8 @@ class Dispatcher:
     def _run(self, command: Command) -> dict[str, Any]:
         if isinstance(command, LiveAudioCommand | LiveStartCommand | LiveStopCommand):
             return self._run_live(command)
+        if isinstance(command, LiveFinalizeCommand):
+            return {"durations": finalize(Path(command.params.dir), list(command.params.tracks))}
         if isinstance(command, LoadModelCommand):
             return self._load_model(command.params)
         if isinstance(command, TranscribeCommand | SelfTestCommand):

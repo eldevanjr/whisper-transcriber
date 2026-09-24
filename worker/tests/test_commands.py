@@ -283,3 +283,14 @@ def test_default_vad_factory_usa_o_silero() -> None:
 
     probs = default_vad_factory()(np.zeros(1024, np.float32))
     assert len(probs) == 2
+
+
+def test_live_finalize_pelo_dispatcher(tmp_path: Path) -> None:
+    from tests.media import make_wav
+
+    make_wav(tmp_path / "live-voce.wav", seconds=1.0, rate=48000)
+    dispatcher, events, *_ = _make()
+    dispatcher.handle(_live("live_finalize", dir=str(tmp_path), tracks=["voce"]))
+    assert events[-1]["type"] == "result"
+    assert events[-1]["data"]["durations"]["voce"] == pytest.approx(1.0, abs=0.1)
+    assert (tmp_path / "audio.m4a").is_file()
