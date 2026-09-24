@@ -71,6 +71,7 @@ function setup(settingsOverride: Partial<Settings> = {}) {
     dataDir: '/dados',
     appInfo: vi.fn(() => ({ version: '0.1.0', platform: 'linux', settingsRecovered: false })),
     externalUrls: new Set(['https://github.com/facebook/react']),
+    liveCapabilities: vi.fn(() => ({ systemAudio: 'monitor' })),
     live: {
       start: vi.fn(() => Promise.resolve({ sessionId: 's', itemId: null })),
       stop: vi.fn(() => Promise.resolve(null)),
@@ -310,8 +311,9 @@ describe('IPC do ao vivo', () => {
     }
   })
 
-  it('stop, pausa e retomar', async () => {
+  it('stop, pausa e retomar; capacidades do sistema', async () => {
     const { call, services } = setup()
+    expect(await call(IPC.liveCapabilities)).toEqual(ok({ systemAudio: 'monitor' }))
     expect(await call(IPC.liveStop)).toEqual(ok(null))
     expect(await call(IPC.livePause)).toEqual(ok(null))
     expect(await call(IPC.liveResume)).toEqual(ok(null))

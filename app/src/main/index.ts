@@ -1,12 +1,13 @@
 import { execFile, spawn } from 'node:child_process'
 import { readFile, writeFile } from 'node:fs/promises'
-import { totalmem } from 'node:os'
+import { release, totalmem } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
 import {
   app,
   BrowserWindow,
   clipboard,
+  desktopCapturer,
   dialog,
   ipcMain,
   nativeTheme,
@@ -26,6 +27,12 @@ import { parseManifest } from './downloads/manifest'
 import { HistoryStore } from './history/store'
 import { registerIpcHandlers, type Services } from './ipc/handlers'
 import { LiveService } from './live/session'
+import {
+  allowPermission,
+  displayMediaHandler,
+  MAC_LOOPBACK_FEATURE,
+  systemAudioSupport
+} from './live/system-audio'
 import { createMediaHandler, MEDIA_SCHEME } from './media-protocol'
 import { appPaths, modelDir } from './paths'
 import { TranscriptionQueue } from './queue/queue'
@@ -43,6 +50,10 @@ import { WorkerSupervisor, type Logger } from './worker/supervisor'
 const execFileAsync = promisify(execFile)
 
 if (process.env.WT_USER_DATA) app.setPath('userData', process.env.WT_USER_DATA)
+
+// macOS 14.2+: áudio do sistema no ao vivo pela captura de tela (precisa ligar antes do ready).
+if (process.platform === 'darwin')
+  app.commandLine.appendSwitch('enable-features', MAC_LOOPBACK_FEATURE)
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -154,6 +165,21 @@ async function main(): Promise<void> {
 
   protocol.handle(MEDIA_SCHEME, createMediaHandler({ history }))
   applyCsp(session.defaultSession)
+  // Ao vivo: só microfone (áudio) e a captura usada para o áudio do sistema; o resto é recusado.
+  session.defaultSession.setPermissionRequestHandler((_contents, permission, callback, details) => {
+    const mediaTypes = 'mediaTypes' in details ? details.mediaTypes : undefined
+    callback(allowPermission(permission, { mediaTypes }))
+  })
+  session.defaultSession.setPermissionCheckHandler((_contents, permission, _origin, details) =>
+    allowPermission(permission, details)
+  )
+  const onDisplayMedia = displayMediaHandler((options) => desktopCapturer.getSources(options))
+  session.defaultSession.setDisplayMediaRequestHandler(
+    (request, callback) => {
+      void onDisplayMedia(request, callback)
+    },
+    { useSystemPicker: false }
+  )
 
   const isDev = !app.isPackaged
   const rendererUrl = isDev ? process.env.ELECTRON_RENDERER_URL : undefined
@@ -202,6 +228,7 @@ async function main(): Promise<void> {
     dataDir: paths.root,
     externalUrls: licenseUrls(licensesJson),
     live,
+    liveCapabilities: () => ({ systemAudio: systemAudioSupport(process.platform, release()) }),
     appInfo: () => ({
       version: app.getVersion(),
       platform: process.platform,

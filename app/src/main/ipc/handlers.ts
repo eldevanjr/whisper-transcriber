@@ -2,7 +2,14 @@ import { z } from 'zod'
 import { AppError, toAppError } from '../../shared/errors'
 import type { SystemInfo, UpdateInfo } from '../../shared/events'
 import { isJobId, type HistoryMeta } from '../../shared/history'
-import { IPC, SEND, type AppInfo, type IpcResult, type LiveStartInput } from '../../shared/ipc'
+import {
+  IPC,
+  SEND,
+  type AppInfo,
+  type IpcResult,
+  type LiveCapabilities,
+  type LiveStartInput
+} from '../../shared/ipc'
 import { formatForDevice, MODEL_FORMATS, MODEL_IDS } from '../../shared/models'
 import { TRACKS, type Track } from '../../shared/settings'
 import type { Installer } from '../downloads/installer'
@@ -37,6 +44,7 @@ export interface Services {
   appInfo(): AppInfo
   /** Links extras permitidos (páginas dos projetos em Licenças). */
   externalUrls: ReadonlySet<string>
+  liveCapabilities(): LiveCapabilities
   live: {
     start(input: LiveStartInput): Promise<{ sessionId: string; itemId: string | null }>
     stop(): Promise<HistoryMeta | null>
@@ -137,6 +145,7 @@ export function registerIpcHandlers(
 }
 
 function registerLive(on: On, s: Services): void {
+  on(IPC.liveCapabilities, None, () => s.liveCapabilities())
   on(IPC.liveStart, LiveStartSchema, (input) => s.live.start(input))
   on(IPC.liveStop, None, () => s.live.stop())
   on(IPC.livePause, None, () => {

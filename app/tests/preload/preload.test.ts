@@ -69,6 +69,7 @@ describe('preload', () => {
         { tracks: ['voce'], test: true, title: 'T' }
       ],
       [() => api.live.stop(), IPC.liveStop, undefined],
+      [() => api.live.capabilities(), IPC.liveCapabilities, undefined],
       [() => api.live.pause(), IPC.livePause, undefined],
       [() => api.live.resume(), IPC.liveResume, undefined]
     ]

@@ -8,7 +8,7 @@ import type {
   UpdateInfo
 } from '../../src/shared/events'
 import type { HistoryMeta } from '../../src/shared/history'
-import type { AppInfo, HistoryDetail, TranscriberApi } from '../../src/shared/ipc'
+import type { AppInfo, HistoryDetail, LiveCapabilities, TranscriberApi } from '../../src/shared/ipc'
 import type { ModelId } from '../../src/shared/models'
 import { DEFAULT_SETTINGS, type Settings } from '../../src/shared/settings'
 
@@ -187,6 +187,9 @@ export class FakeApi implements TranscriberApi {
   }
 
   live = {
+    capabilities: vi.fn((): Promise<LiveCapabilities> =>
+      Promise.resolve({ systemAudio: 'monitor' })
+    ),
     start: vi.fn(() => Promise.resolve({ sessionId: 's1', itemId: null as string | null })),
     stop: vi.fn(() => Promise.resolve(null as HistoryMeta | null)),
     pause: vi.fn(() => Promise.resolve(null)),

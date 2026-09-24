@@ -49,7 +49,8 @@ export const IPC = {
   liveStart: 'live:start',
   liveStop: 'live:stop',
   livePause: 'live:pause',
-  liveResume: 'live:resume'
+  liveResume: 'live:resume',
+  liveCapabilities: 'live:capabilities'
 } as const
 
 export const EVENTS = {
@@ -64,6 +65,10 @@ export const EVENTS = {
 export const SEND = {
   liveAudio: 'live:audio'
 } as const
+
+export interface LiveCapabilities {
+  systemAudio: 'loopback' | 'monitor' | 'unavailable'
+}
 
 export interface LiveStartInput {
   tracks: Track[]
@@ -164,6 +169,8 @@ export interface TranscriberApi {
   }
   app: { info(): Promise<AppInfo> }
   live: {
+    /** O que o sistema oferece para o áudio dos "Outros". */
+    capabilities(): Promise<LiveCapabilities>
     start(input: LiveStartInput): Promise<{ sessionId: string; itemId: string | null }>
     stop(): Promise<HistoryMeta | null>
     pause(): Promise<null>

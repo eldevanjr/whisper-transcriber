@@ -76,6 +76,7 @@ export const api: TranscriberApi = {
   },
   app: { info: () => invoke(IPC.appInfo) },
   live: {
+    capabilities: () => invoke(IPC.liveCapabilities),
     start: (input) => invoke(IPC.liveStart, input),
     stop: () => invoke(IPC.liveStop),
     pause: () => invoke(IPC.livePause),
