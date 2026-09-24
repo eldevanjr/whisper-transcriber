@@ -8,9 +8,11 @@ import { createI18n, type UiLanguage } from '../../src/renderer/src/i18n'
 import { AppProviders } from '../../src/renderer/src/providers'
 import { createAppStore, type AppStore } from '../../src/renderer/src/store/app-store'
 import { FakeApi } from './fake-api'
+import { FakeLiveMedia } from './fake-media'
 
 export interface Rendered extends RenderResult {
   api: FakeApi
+  media: FakeLiveMedia
   store: AppStore
   i18n: i18n
   user: UserEvent
@@ -18,15 +20,16 @@ export interface Rendered extends RenderResult {
 
 export async function renderWithApp(
   ui: ReactNode,
-  options: { api?: FakeApi; init?: boolean; language?: UiLanguage } = {}
+  options: { api?: FakeApi; media?: FakeLiveMedia; init?: boolean; language?: UiLanguage } = {}
 ): Promise<Rendered> {
   const api = options.api ?? new FakeApi()
+  const media = options.media ?? new FakeLiveMedia()
   const store = createAppStore(api)
   if (options.init !== false) await store.getState().init()
   const i18n = createI18n(options.language ?? 'pt-BR')
   const user = userEvent.setup()
   const wrap = (node: ReactNode) => (
-    <AppProviders api={api} store={store} i18n={i18n}>
+    <AppProviders api={api} store={store} i18n={i18n} liveMedia={media}>
       {node}
     </AppProviders>
   )
@@ -35,7 +38,7 @@ export async function renderWithApp(
   const rerender = (node: ReactNode) => {
     result.rerender(wrap(node))
   }
-  return { ...result, rerender, api, store, i18n, user }
+  return { ...result, rerender, api, media, store, i18n, user }
 }
 
 /** axe-core no DOM renderizado (o jsdom não calcula cores: contraste fica para o E2E). */

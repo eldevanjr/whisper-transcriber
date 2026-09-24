@@ -152,7 +152,8 @@ function ModelList({ settings }: { settings: Settings }) {
   )
 }
 
-function AudioLanguage({ settings }: { settings: Settings }) {
+/** Idioma falado no áudio (também na tela do ao vivo). */
+export function AudioLanguageField({ settings }: { settings: Settings }) {
   const { t, i18n } = useTranslation()
   const save = useSaveSettings()
   const options = useMemo(() => {
@@ -165,14 +166,21 @@ function AudioLanguage({ settings }: { settings: Settings }) {
     return [{ value: 'auto', label: t('settings.audioLanguage.auto') }, ...languages]
   }, [i18n.language, t])
   return (
+    <SelectField
+      label={t('settings.audioLanguage.title')}
+      value={settings.audioLanguage}
+      options={options}
+      hint={t('settings.audioLanguage.hint')}
+      onChange={(audioLanguage) => void save({ audioLanguage })}
+    />
+  )
+}
+
+function AudioLanguage({ settings }: { settings: Settings }) {
+  const { t } = useTranslation()
+  return (
     <SettingsCard title={t('settings.audioLanguage.title')}>
-      <SelectField
-        label={t('settings.audioLanguage.title')}
-        value={settings.audioLanguage}
-        options={options}
-        hint={t('settings.audioLanguage.hint')}
-        onChange={(audioLanguage) => void save({ audioLanguage })}
-      />
+      <AudioLanguageField settings={settings} />
     </SettingsCard>
   )
 }

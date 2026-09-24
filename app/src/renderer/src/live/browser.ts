@@ -1,6 +1,7 @@
 // APIs reais do navegador para a captura (o jsdom não tem AudioContext): fora da cobertura.
 import { CAPTURE_RATE, type PcmBlock } from './chunker'
-import { WORKLET_NAME, type CaptureDeps } from './capture'
+import { startCapture, WORKLET_NAME, type CaptureDeps, type LiveMedia } from './capture'
+import { listInputDevices } from './devices'
 import workletUrl from './pcm-worklet?worker&url'
 
 export function browserCaptureDeps(): CaptureDeps {
@@ -28,5 +29,12 @@ export function browserCaptureDeps(): CaptureDeps {
       }
     },
     workletUrl
+  }
+}
+
+export function browserLiveMedia(): LiveMedia {
+  return {
+    start: (options) => startCapture(options, browserCaptureDeps()),
+    devices: () => listInputDevices(navigator.mediaDevices)
   }
 }

@@ -4,6 +4,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { App } from './App'
 import { createI18n, resolveLanguage } from './i18n'
+import { browserLiveMedia } from './live/browser'
 import { AppProviders } from './providers'
 import { createAppStore } from './store/app-store'
 
@@ -17,6 +18,7 @@ if (root) {
         api={api}
         store={createAppStore(api)}
         i18n={createI18n(resolveLanguage(null, navigator.language))}
+        liveMedia={browserLiveMedia()}
       >
         <App />
       </AppProviders>

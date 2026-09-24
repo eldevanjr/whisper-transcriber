@@ -4,6 +4,8 @@ import {
   downloadKey,
   type DownloadEvent,
   DownloadTarget,
+  type LiveEvent,
+  type LiveState,
   Phase,
   QueueEvent,
   QueueState,
@@ -12,7 +14,7 @@ import {
 import type { HistoryMeta, Segment } from '../../../shared/history'
 import type { AppInfo, TranscriberApi } from '../../../shared/ipc'
 import type { Sample } from '../lib/rate'
-import type { Settings } from '../../../shared/settings'
+import type { Settings, Track } from '../../../shared/settings'
 
 export interface Progress {
   pct: number
@@ -45,7 +47,25 @@ export interface Notice {
 }
 
 export type SettingsSection =
-  'general' | 'transcription' | 'storage' | 'help' | 'about' | 'licenses'
+  'general' | 'transcription' | 'live' | 'storage' | 'help' | 'about' | 'licenses'
+
+export interface LiveBubble {
+  track: Track
+  start: number
+  end: number
+  text: string
+}
+
+/** Sessão ao vivo (ou teste) como o main informa: a captura em si fica na tela. */
+export interface LiveSessionState {
+  state: LiveState
+  test: boolean
+  itemId: string | null
+  segments: LiveBubble[]
+  listening: Record<Track, boolean>
+  /** Segundos que a transcrição está atrás da fala. */
+  lag: number
+}
 
 export interface AppState {
   ready: boolean
@@ -61,7 +81,8 @@ export interface AppState {
   downloads: Record<string, DownloadState>
   notices: Notice[]
   selectedId: string | null
-  view: 'main' | 'settings'
+  liveSession: LiveSessionState
+  view: 'main' | 'settings' | 'live'
   settingsSection: SettingsSection
 }
 
@@ -73,6 +94,8 @@ export interface AppActions {
   select: (id: string | null) => void
   openSettings: (section?: SettingsSection) => void
   closeSettings: () => void
+  openLive: () => void
+  closeLive: () => void
   pushNotice: (notice: Omit<Notice, 'id'>) => void
   dismissNotice: (id: number) => void
 }
@@ -165,6 +188,38 @@ function reduceQueue(state: AppState, event: QueueEvent): Partial<AppState> {
   }
 }
 
+const NOT_LISTENING: Record<Track, boolean> = { voce: false, outros: false }
+const IDLE_SESSION: LiveSessionState = {
+  state: 'idle',
+  test: false,
+  itemId: null,
+  segments: [],
+  listening: NOT_LISTENING,
+  lag: 0
+}
+
+function reduceLive(session: LiveSessionState, event: LiveEvent): LiveSessionState {
+  switch (event.type) {
+    case 'state': {
+      const { state, test, itemId } = event
+      if (state === 'starting') return { ...IDLE_SESSION, state, test, itemId }
+      // Encerrada: o texto fica na tela (é o preview do teste); o resto volta ao repouso.
+      if (state === 'idle') return { ...session, state, listening: NOT_LISTENING, lag: 0 }
+      return { ...session, state, test, itemId }
+    }
+    case 'segment': {
+      const { track, start, end, text } = event
+      return { ...session, segments: [...session.segments, { track, start, end, text }] }
+    }
+    case 'listening':
+      return { ...session, listening: { ...session.listening, [event.track]: event.active } }
+    case 'lag':
+      return { ...session, lag: event.seconds }
+    case 'error':
+      return session
+  }
+}
+
 const MAX_SAMPLES = 30
 
 function reduceDownload(state: AppState, event: DownloadEvent, now: number): Partial<AppState> {
@@ -235,6 +290,7 @@ export function createAppStore(
       downloads: {},
       notices: [],
       selectedId: null,
+      liveSession: IDLE_SESSION,
       view: 'main',
       settingsSection: 'general',
 
@@ -247,6 +303,13 @@ export function createAppStore(
           }),
           api.settings.onChanged((next) => {
             set({ settings: next })
+          }),
+          api.live.onEvent((event) => {
+            if (event.type === 'error') {
+              const error = { code: event.code, message: '' }
+              pushNotice({ kind: 'error', key: `errors.${event.code}`, error })
+            }
+            set((state) => ({ liveSession: reduceLive(state.liveSession, event) }))
           })
         ]
         const [settings, appInfo, systemInfo, queue, history] = await Promise.all([
@@ -292,6 +355,12 @@ export function createAppStore(
         set({ view: 'settings', settingsSection: section })
       },
       closeSettings() {
+        set({ view: 'main' })
+      },
+      openLive() {
+        set({ view: 'live' })
+      },
+      closeLive() {
         set({ view: 'main' })
       },
       pushNotice,

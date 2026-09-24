@@ -2,7 +2,7 @@ import { AppError } from '../../../shared/errors'
 import type { LiveCapabilities } from '../../../shared/ipc'
 import type { Track } from '../../../shared/settings'
 import type { PcmBlock } from './chunker'
-import { findMonitor, listInputDevices } from './devices'
+import { findMonitor, listInputDevices, type InputDevice } from './devices'
 
 export const WORKLET_NAME = 'pcm-capture'
 
@@ -16,6 +16,12 @@ export interface Capture {
   tracks: Track[]
   onEvent(callback: (event: CaptureEvent) => void): () => void
   stop(): Promise<void>
+}
+
+/** O que as telas usam do navegador (injetado: nos testes, um dublê). */
+export interface LiveMedia {
+  start(options: CaptureOptions): Promise<Capture>
+  devices(): Promise<InputDevice[]>
 }
 
 export interface CaptureOptions {

@@ -29,7 +29,7 @@ describe('createAppStore', () => {
 
   it('o unsubscribe devolvido por init remove todos os ouvintes', async () => {
     const { api, stop } = await ready()
-    expect(api.listenerCount()).toBe(3)
+    expect(api.listenerCount()).toBe(4)
     stop()
     expect(api.listenerCount()).toBe(0)
   })
