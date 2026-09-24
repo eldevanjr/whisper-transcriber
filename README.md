@@ -10,6 +10,23 @@ e [whisper.cpp](https://github.com/ggml-org/whisper.cpp) (GPU por Vulkan ou Meta
 - Histórico com o áudio salvo; GPU NVIDIA (CUDA), AMD/Intel (Vulkan) ou Apple Silicon (Metal).
 - Interface em português, inglês e espanhol; temas claro, escuro ou do sistema.
 
+## Veja funcionando
+
+![Transcrição ao vivo: fila com vídeos e áudios, trechos aparecendo como num chat e o vídeo acompanhando](docs/screenshots/01-transcrevendo.png)
+
+| | |
+|---|---|
+| ![Aba Trechos: cada trecho com o tempo; clicar pula o vídeo](docs/screenshots/02-trechos.png) | ![Aba Texto: a transcrição em parágrafos, pronta para copiar ou baixar](docs/screenshots/03-texto.png) |
+| **Trechos** — cada fala com o tempo; clique para pular o vídeo | **Texto** — parágrafos prontos para copiar ou baixar |
+| ![Tema escuro](docs/screenshots/05-tema-escuro.png) | ![Escolha do modelo na primeira abertura, com a GPU detectada](docs/screenshots/06-escolha-do-modelo.png) |
+| **Tema escuro** (ou claro, ou o do sistema) | **Primeira abertura** — escolha do modelo e uso da GPU |
+
+![Configurações de transcrição: modelos, idioma do áudio e processamento na CPU ou GPU](docs/screenshots/04-configuracoes.png)
+
+<sub>Mídias das capturas, todas em domínio público: discurso de John F. Kennedy na Rice University
+(1962) e vídeo da NASA sobre a tripulação da Artemis II, via Wikimedia Commons; contos
+"Miss Dollar" e "O relógio de ouro", de Machado de Assis, na leitura do LibriVox.</sub>
+
 ## Instalação
 
 Baixe o instalador do seu sistema na [última versão](https://github.com/eldevanjr/whisper-transcriber/releases/latest)
