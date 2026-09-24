@@ -40,6 +40,7 @@ async function setup(overrides: Partial<LiveDeps> = {}, settings: Partial<Settin
     ...settings
   }
   const items = vi.fn()
+  const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() }
   const service = new LiveService({
     worker,
     queue,
@@ -47,10 +48,21 @@ async function setup(overrides: Partial<LiveDeps> = {}, settings: Partial<Settin
     settings: { get: () => current },
     emit: (event) => events.push(event),
     onItem: items,
-    logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+    logger,
     ...overrides
   })
-  return { service, history, worker, queue, requests, notified, events, items }
+  return {
+    service,
+    history,
+    worker,
+    queue,
+    requests,
+    notified,
+    events,
+    items,
+    logger,
+    sessionId: ''
+  }
 }
 
 const block = (value = 1000) => new Int16Array(BLOCK_48K).fill(value)
@@ -144,7 +156,8 @@ describe('LiveService', () => {
 
   it('pausa: blocos ignorados e a numeração para o worker continua sem buraco', async () => {
     const ctx = await setup()
-    await ctx.service.start({ tracks: ['voce'], test: true, title: 'T' })
+    const { sessionId } = await ctx.service.start({ tracks: ['voce'], test: true, title: 'T' })
+    Object.assign(ctx, { sessionId })
     ctx.service.audio('voce', 0, block())
     ctx.service.pause()
     ctx.service.audio('voce', 1, block())
@@ -155,6 +168,22 @@ describe('LiveService', () => {
       (c) => (c as Extract<WorkerCommand, { cmd: 'live_audio' }>).params.seq
     )
     expect(seqs).toEqual([0, 1]) // o intervalo pausado não conta
+    // a frase em andamento é fechada e transcrita na pausa
+    expect(ctx.requests).toContainEqual({
+      cmd: 'live_pause',
+      params: { session_id: ctx.sessionId }
+    })
+    await ctx.service.stop()
+  })
+
+  it('pausa com o worker fora do ar só registra no log', async () => {
+    const ctx = await setup()
+    await ctx.service.start({ tracks: ['voce'], test: true, title: 'T' })
+    ctx.worker.request.mockRejectedValueOnce(new AppError('WORKER_CRASHED', 'caiu'))
+    ctx.service.pause()
+    await vi.waitFor(() => {
+      expect(ctx.logger.warn).toHaveBeenCalledWith(expect.stringContaining('WORKER_CRASHED'))
+    })
     await ctx.service.stop()
   })
 
@@ -269,6 +298,92 @@ describe('LiveService — falhas', () => {
       status: 'failed',
       error: { code: 'DISK_FULL' }
     })
+  })
+
+  it('worker caiu (live_stop falha): ainda fecha a gravação, finaliza o item e libera a fila', async () => {
+    const ctx = await setup()
+    await ctx.service.start({ tracks: ['voce'], test: false, title: 'R' })
+    ctx.worker.request.mockImplementation((command: WorkerCommand) => {
+      ctx.requests.push(command)
+      if (command.cmd === 'live_stop') return Promise.reject(new AppError('WORKER_CRASHED', 'caiu'))
+      if (command.cmd === 'live_finalize') return Promise.resolve({ durations: { voce: 3 } })
+      return Promise.resolve({})
+    })
+    expect(await ctx.service.stop()).toMatchObject({ status: 'done', duration: 3 })
+    expect(ctx.service.state).toBe('idle')
+    expect(ctx.queue.releaseLive).toHaveBeenCalled()
+  })
+
+  it('fechar o WAV ou gravar um trecho falhando não impede de finalizar', async () => {
+    const close = vi.fn(() => Promise.reject(new Error('cheio')))
+    const ctx = await setup({
+      openWav: () => Promise.resolve({ samples: 0, append: () => Promise.resolve(), close })
+    })
+    const { sessionId } = await ctx.service.start({ tracks: ['voce'], test: false, title: 'R' })
+    vi.spyOn(ctx.history, 'appendSegment').mockRejectedValueOnce(new Error('cheio'))
+    ctx.service.onWorkerEvent(segmentEvent(sessionId, 'Oi'))
+    expect(await ctx.service.stop()).toMatchObject({ status: 'done' })
+    expect(close).toHaveBeenCalled()
+    expect(ctx.logger.error).toHaveBeenCalled()
+  })
+
+  it('um trecho que não pôde ser gravado não impede os seguintes', async () => {
+    const ctx = await setup()
+    const { sessionId } = await ctx.service.start({ tracks: ['voce'], test: false, title: 'R' })
+    vi.spyOn(ctx.history, 'appendSegment').mockRejectedValueOnce(new Error('cheio'))
+    ctx.service.onWorkerEvent(segmentEvent(sessionId, 'perdido'))
+    ctx.service.onWorkerEvent(segmentEvent(sessionId, 'salvo'))
+    const meta = await ctx.service.stop()
+    const entries = await ctx.history.readActive(meta!)
+    expect(entries.map((e) => e.texto)).toEqual(['salvo'])
+  })
+
+  it('worker caiu no meio da sessão (bloco não enviado): avisa e encerra salvando', async () => {
+    const ctx = await setup()
+    await ctx.service.start({ tracks: ['voce'], test: false, title: 'R' })
+    ctx.worker.notify.mockReturnValue(false)
+    ctx.service.audio('voce', 0, block())
+    ctx.service.audio('voce', 1, block())
+    await vi.waitFor(() => {
+      expect(ctx.service.state).toBe('idle')
+    })
+    expect(ctx.events.filter((e) => e.type === 'error')).toEqual([
+      { type: 'error', code: 'WORKER_CRASHED' }
+    ])
+    const [item] = (await ctx.history.list()).entries
+    expect(item).toMatchObject({ status: 'done' })
+  })
+
+  it('recuperação: um item que falha vira "falhou" e os outros seguem', async () => {
+    const ctx = await setup()
+    const broken = await ctx.history.createLive({
+      title: 'A',
+      tracks: ['voce'],
+      model: 'medium',
+      language: null
+    })
+    const good = await ctx.history.createLive({
+      title: 'B',
+      tracks: ['voce'],
+      model: 'medium',
+      language: null
+    })
+    for (const meta of [broken, good]) {
+      await ctx.history.update(meta.id, { status: 'interrupted' })
+      await writeFile(join(ctx.history.paths(meta.id).dir, 'live-voce.wav'), Buffer.alloc(100))
+    }
+    ctx.worker.request.mockImplementation((command: WorkerCommand) => {
+      if (command.cmd === 'live_finalize' && command.params.dir.includes(broken.id)) {
+        return Promise.reject(new AppError('INVALID_MEDIA', 'quebrado'))
+      }
+      return Promise.resolve({ durations: { voce: 5 } })
+    })
+    await ctx.service.recover()
+    expect(await ctx.history.get(broken.id)).toMatchObject({
+      status: 'failed',
+      error: { code: 'INVALID_MEDIA' }
+    })
+    expect(await ctx.history.get(good.id)).toMatchObject({ status: 'interrupted', duration: 5 })
   })
 
   it('recuperação ignora sessões sem gravação e itens de arquivo', async () => {

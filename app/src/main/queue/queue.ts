@@ -141,6 +141,7 @@ export class TranscriptionQueue {
     if (!RETRYABLE.has(meta.status)) {
       throw new AppError('INVALID_REQUEST', 'Este item ainda está na fila')
     }
+    if (meta.kind === 'live') await this.deps.history.prepareRedo(meta)
     const source = sourcePath === undefined ? {} : await this.sourceFields(sourcePath)
     // Outro arquivo: o áudio extraído do antigo não serve. Mesmo arquivo: o worker reaproveita.
     if (sourcePath === undefined) await this.deps.history.discardPartial(id)
@@ -215,7 +216,9 @@ export class TranscriptionQueue {
     const model = requireModel(settings)
     this.gpuFailedFor = settings
     this.fallback = await this.cpuTarget(model, settings)
-    await this.loadModel(model, this.fallback.device, this.fallback.configured)
+    // No mesmo processo: trocar de processo mataria a sessão ao vivo do worker (e os trechos na
+    // fila dele). O ambiente do processo da GPU também roda a CPU.
+    await this.loadModel(model, this.fallback.device, this.fallback.configured, settings.device)
   }
 
   releaseLive(): void {
@@ -398,7 +401,12 @@ export class TranscriptionQueue {
   }
 
   /** `configured` escolhe a engine (gpu → whisper.cpp com modelo GGML); `device` é onde roda. */
-  private async loadModel(model: ModelId, device: Device, configured: Device): Promise<void> {
+  private async loadModel(
+    model: ModelId,
+    device: Device,
+    configured: Device,
+    processDevice: Device = device
+  ): Promise<void> {
     const format = formatForDevice(configured)
     const model_dir = this.deps.modelDir(model, format)
     const cuda = device === 'cuda'
@@ -412,7 +420,7 @@ export class TranscriptionQueue {
             compute_type: cuda ? ('float16' as const) : ('int8' as const),
             ...(cuda ? { cuda_lib_dir: this.deps.cudaLibDir } : {})
           }
-    await this.deps.worker.request({ cmd: 'load_model', params }, { device })
+    await this.deps.worker.request({ cmd: 'load_model', params }, { device: processDevice })
   }
 
   private onJobEvent(

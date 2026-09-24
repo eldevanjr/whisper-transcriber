@@ -175,7 +175,7 @@ export class LiveService {
     state.sent += missing // o worker preenche o buraco com silêncio
     if (state.wav) this.record(session, state.wav, missing, pcm)
     const down = state.down.push(pcm)
-    this.deps.worker.notify({
+    const sent = this.deps.worker.notify({
       cmd: 'live_audio',
       params: {
         session_id: session.id,
@@ -185,6 +185,15 @@ export class LiveService {
       }
     })
     state.sent += 1
+    if (!sent) this.onWorkerLost()
+  }
+
+  /** O worker caiu no meio da sessão: avisa e encerra salvando o que foi gravado. */
+  private onWorkerLost(): void {
+    // Só chamado de audio(), que exige "gravando": o stop() leva a "encerrando" e não repete.
+    this.deps.logger.error('[ao vivo] o motor parou no meio da sessão; encerrando')
+    this.deps.emit({ type: 'error', code: 'WORKER_CRASHED' })
+    void this.stop()
   }
 
   private record(session: Session, wav: TrackWriter, missing: number, pcm: Int16Array): void {
@@ -203,8 +212,15 @@ export class LiveService {
   }
 
   pause(): void {
-    if (this.state !== 'recording' || !this.session) return
-    this.setState('paused', this.session.test, this.session.itemId)
+    const session = this.session
+    if (this.state !== 'recording' || !session) return
+    this.setState('paused', session.test, session.itemId)
+    // O worker fecha e transcreve a frase em andamento (a linha do tempo não muda).
+    this.deps.worker
+      .request({ cmd: 'live_pause', params: { session_id: session.id } })
+      .catch((error: unknown) => {
+        this.deps.logger.warn(`[ao vivo] pausa no worker falhou: ${toAppError(error).code}`)
+      })
   }
 
   resume(): void {
@@ -219,14 +235,27 @@ export class LiveService {
     if (!session || this.state === 'stopping' || this.state === 'idle') return null
     this.setState('stopping', session.test, session.itemId)
     try {
-      await this.deps.worker.request({ cmd: 'live_stop', params: { session_id: session.id } })
-      await session.writes
-      for (const state of session.tracks.values()) await state.wav?.close()
+      // Cada etapa falha sozinha: o que foi gravado sempre é fechado e finalizado.
+      await this.attempt('live_stop', () =>
+        this.deps.worker.request({ cmd: 'live_stop', params: { session_id: session.id } })
+      )
+      await this.attempt('trechos', () => session.writes)
+      for (const state of session.tracks.values()) {
+        if (state.wav) await this.attempt('fechar a gravação', () => state.wav?.close())
+      }
       return session.itemId ? await this.finish(session.itemId, [...session.tracks.keys()]) : null
     } finally {
       this.session = null
       this.deps.queue.releaseLive()
       this.setState('idle', session.test, null)
+    }
+  }
+
+  private async attempt(step: string, action: () => Promise<unknown> | undefined): Promise<void> {
+    try {
+      await action()
+    } catch (error) {
+      this.deps.logger.error(`[ao vivo] ${step} falhou: ${String(error)}`)
     }
   }
 
@@ -281,7 +310,11 @@ export class LiveService {
     const { itemId } = session
     if (itemId) {
       session.writes = session.writes.then(() =>
-        this.deps.history.appendSegment(itemId, { ...segment, speaker: event.track })
+        this.deps.history
+          .appendSegment(itemId, { ...segment, speaker: event.track })
+          .catch((error: unknown) => {
+            this.deps.logger.error(`[ao vivo] trecho não gravado: ${String(error)}`)
+          })
       )
     }
     this.deps.emit({ type: 'segment', track: event.track, ...segment })
@@ -300,15 +333,25 @@ export class LiveService {
   async recover(): Promise<void> {
     const { entries } = await this.deps.history.list()
     for (const meta of entries.filter((e) => e.kind === 'live' && e.status !== 'done')) {
-      const dir = this.deps.history.paths(meta.id).dir
-      const tracks = (await readdir(dir))
-        .map((name) => /^live-(voce|outros)\.wav$/.exec(name)?.[1] as Track | undefined)
-        .filter((track): track is Track => track !== undefined)
-      if (tracks.length === 0) continue
-      const duration = await this.finalizeFiles(meta.id, tracks)
-      await this.deps.history.finalizeLive(meta.id)
-      this.deps.onItem(await this.deps.history.update(meta.id, { status: 'interrupted', duration }))
+      try {
+        await this.recoverItem(meta)
+      } catch (error) {
+        // Um item quebrado não pode impedir os outros (nem tentar de novo a cada abertura).
+        this.deps.logger.error(`[ao vivo] não foi possível recuperar ${meta.id}: ${String(error)}`)
+        this.deps.onItem(await this.fail(meta.id, error))
+      }
     }
+  }
+
+  private async recoverItem(meta: HistoryMeta): Promise<void> {
+    const dir = this.deps.history.paths(meta.id).dir
+    const tracks = (await readdir(dir))
+      .map((name) => /^live-(voce|outros)\.wav$/.exec(name)?.[1] as Track | undefined)
+      .filter((track): track is Track => track !== undefined)
+    if (tracks.length === 0) return
+    const duration = await this.finalizeFiles(meta.id, tracks)
+    await this.deps.history.finalizeLive(meta.id)
+    this.deps.onItem(await this.deps.history.update(meta.id, { status: 'interrupted', duration }))
   }
 
   private setState(state: LiveState, test: boolean, itemId: string | null): void {

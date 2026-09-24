@@ -174,6 +174,20 @@ export class HistoryStore {
     return this.readOrPartial(path, meta.id)
   }
 
+  /**
+   * Antes de refazer um item ao vivo: as faixas precisam estar convertidas (m4a) e a versão ao
+   * vivo guardada, porque o refazer usa o parcial para a versão nova.
+   */
+  async prepareRedo(meta: HistoryMeta): Promise<void> {
+    const { dir, live } = this.paths(meta.id)
+    for (const track of meta.tracks ?? []) {
+      if (!(await pathExists(join(dir, `${track}.m4a`)))) {
+        throw new AppError('FILE_NOT_FOUND', 'A gravação desta sessão não está pronta', track)
+      }
+    }
+    if (!(await pathExists(live))) await this.finalizeLive(meta.id)
+  }
+
   async hasRedo(meta: HistoryMeta): Promise<boolean> {
     return meta.kind === 'live' && (await pathExists(this.paths(meta.id).transcript))
   }

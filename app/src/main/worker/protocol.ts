@@ -134,6 +134,7 @@ export type WorkerCommand =
       params: { session_id: string; track: Track; seq: number; pcm16_b64: string }
     }
   | { cmd: 'live_stop'; params: { session_id: string } }
+  | { cmd: 'live_pause'; params: { session_id: string } }
   | { cmd: 'live_finalize'; params: { dir: string; tracks: Track[] } }
 
 export function parseWorkerEvent(line: string): WorkerEvent | null {

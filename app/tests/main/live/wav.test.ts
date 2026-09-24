@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { WavWriter } from '../../../src/main/live/wav'
 import { makeTempDir } from '../../helpers/tmp'
 
@@ -55,5 +55,42 @@ describe('WavWriter', () => {
     const data = await readFile(path)
     expect(header(data).dataSize).toBe(0) // o worker corrige (fix_wav_header) na recuperação
     await wav.close()
+  })
+})
+
+describe('WavWriter com falhas de escrita', () => {
+  it('uma escrita que falha não trava as seguintes, e o close sempre fecha o arquivo', async () => {
+    const writes: number[] = []
+    let failNext = true
+    const file = {
+      write: (_buffer: Buffer, _offset: number, length: number, position: number) => {
+        if (position > 0 && length > 0 && failNext) {
+          failNext = false
+          return Promise.reject(Object.assign(new Error('cheio'), { code: 'ENOSPC' }))
+        }
+        writes.push(position)
+        return Promise.resolve({ bytesWritten: length, buffer: _buffer })
+      },
+      close: vi.fn(() => Promise.resolve())
+    }
+    const wav = await WavWriter.open('/x.wav', () => Promise.resolve(file as never))
+    await expect(wav.append(new Int16Array(10))).rejects.toMatchObject({ code: 'ENOSPC' })
+    await wav.append(new Int16Array(10)) // espaço liberado: a próxima grava
+    await wav.close()
+    expect(writes).toEqual([0, 64, 0]) // cabeçalho, 2º bloco (44 + 20 bytes), cabeçalho final
+    expect(file.close).toHaveBeenCalled()
+  })
+
+  it('cabeçalho final que falha ainda fecha o arquivo e repassa o erro', async () => {
+    const file = {
+      write: vi
+        .fn()
+        .mockResolvedValueOnce({ bytesWritten: 44 })
+        .mockRejectedValueOnce(new Error('cheio')),
+      close: vi.fn(() => Promise.resolve())
+    }
+    const wav = await WavWriter.open('/x.wav', () => Promise.resolve(file as never))
+    await expect(wav.close()).rejects.toThrow('cheio')
+    expect(file.close).toHaveBeenCalled()
   })
 })

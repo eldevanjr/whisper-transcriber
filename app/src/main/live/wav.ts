@@ -31,8 +31,11 @@ export class WavWriter {
 
   private constructor(private readonly file: FileHandle) {}
 
-  static async open(path: string): Promise<WavWriter> {
-    const file = await open(path, 'w')
+  static async open(
+    path: string,
+    openFile: (path: string, flags: string) => Promise<FileHandle> = open
+  ): Promise<WavWriter> {
+    const file = await openFile(path, 'w')
     await file.write(wavHeader(0), 0, HEADER, 0)
     return new WavWriter(file)
   }
@@ -43,13 +46,18 @@ export class WavWriter {
     const position = HEADER + this.samples * 2
     this.samples += pcm.length
     const write = this.queue.then(() => this.file.write(bytes, 0, bytes.length, position))
-    this.queue = write
+    // Uma escrita que falhou (disco cheio) não trava as seguintes: quem chamou recebe o erro.
+    this.queue = write.catch(() => undefined)
     return write.then(() => undefined)
   }
 
+  /** Sempre fecha o arquivo (senão ele fica preso, e no Windows não dá para excluir). */
   async close(): Promise<void> {
     await this.queue
-    await this.file.write(wavHeader(this.samples * 2), 0, HEADER, 0)
-    await this.file.close()
+    try {
+      await this.file.write(wavHeader(this.samples * 2), 0, HEADER, 0)
+    } finally {
+      await this.file.close()
+    }
   }
 }
