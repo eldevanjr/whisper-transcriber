@@ -11,7 +11,7 @@ describe('systemAudioSupport', () => {
     ['darwin', '23.2.0', 'loopback'], // macOS 14.2
     ['darwin', '24.1.0', 'loopback'],
     ['darwin', '23.1.0', 'unavailable'], // macOS 14.1: sem captura de áudio do sistema
-    ['linux', '6.14.0-35-generic', 'monitor'],
+    ['linux', '6.14.0-35-generic', 'loopback'],
     ['freebsd', '14.0', 'unavailable']
   ])('%s %s → %s', (platform, release, expected) => {
     expect(systemAudioSupport(platform, release)).toBe(expected)
@@ -41,6 +41,7 @@ describe('allowPermission', () => {
     expect(allowPermission('media', { mediaTypes: ['audio'] })).toBe(true)
     expect(allowPermission('media', { mediaTypes: ['audio', 'video'] })).toBe(false) // câmera não
     expect(allowPermission('media', {})).toBe(false)
+    expect(allowPermission('media', { mediaTypes: [] })).toBe(true) // getDisplayMedia
     // verificação (setPermissionCheckHandler) manda o tipo no singular
     expect(allowPermission('media', { mediaType: 'audio' })).toBe(true)
     expect(allowPermission('media', { mediaType: 'video' })).toBe(false)
