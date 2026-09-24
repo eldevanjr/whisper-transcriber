@@ -13,7 +13,7 @@ const AUDIO = join(HERE, 'fixtures', 'silence.m4a')
 const send = (event) => process.stdout.write(`${JSON.stringify(event)}\n`)
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
-send({ type: 'ready', protocol: 2, version: VERSION })
+send({ type: 'ready', protocol: 3, version: VERSION })
 setInterval(() => send({ type: 'heartbeat' }), 2000).unref()
 
 const SEGMENTS = [

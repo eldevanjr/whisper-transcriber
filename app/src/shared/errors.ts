@@ -10,6 +10,8 @@ export const WORKER_ERROR_CODES = [
   'NO_AUDIO',
   'FILE_NOT_FOUND',
   'DISK_FULL',
+  'LIVE_NOT_STARTED',
+  'LIVE_ACTIVE',
   'INTERNAL'
 ] as const
 

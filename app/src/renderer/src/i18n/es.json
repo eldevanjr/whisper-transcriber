@@ -49,7 +49,9 @@
       "downloadModel": "Descargar el modelo de nuevo"
     },
     "report": "Informar un problema",
-    "GPU_FAILED": "La GPU falló. La transcripción siguió en la CPU."
+    "GPU_FAILED": "La GPU falló. La transcripción siguió en la CPU.",
+    "LIVE_NOT_STARTED": "No hay ninguna sesión en vivo en curso.",
+    "LIVE_ACTIVE": "Ya hay una transcripción en vivo en curso."
   },
   "notices": {
     "cudaFallback": "La GPU falló; esta transcripción siguió en la CPU.",

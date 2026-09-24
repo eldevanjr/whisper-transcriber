@@ -49,7 +49,9 @@
       "downloadModel": "Download the model again"
     },
     "report": "Report a problem",
-    "GPU_FAILED": "The GPU failed. Transcription continued on the CPU."
+    "GPU_FAILED": "The GPU failed. Transcription continued on the CPU.",
+    "LIVE_NOT_STARTED": "No live session is running.",
+    "LIVE_ACTIVE": "A live transcription is already running."
   },
   "notices": {
     "cudaFallback": "The GPU failed; this transcription continued on the CPU.",

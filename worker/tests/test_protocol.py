@@ -8,6 +8,10 @@ from transcriber_worker.errors import ErrorCode, WorkerError
 from transcriber_worker.protocol import (
     MAX_LINE_LENGTH,
     EventWriter,
+    LiveAudioCommand,
+    LiveFinalizeCommand,
+    LiveStartCommand,
+    LiveStopCommand,
     LoadModelCommand,
     SelfTestCommand,
     ShutdownCommand,
@@ -156,10 +160,10 @@ def test_peek_command_id_survives_deeply_nested_json() -> None:
     assert peek_command_id("[" * 60000) is None
 
 
-def test_protocol_version_is_2() -> None:
+def test_protocol_version_is_3() -> None:
     from transcriber_worker import PROTOCOL_VERSION
 
-    assert PROTOCOL_VERSION == 2
+    assert PROTOCOL_VERSION == 3
 
 
 def test_load_model_defaults_to_faster_whisper() -> None:
@@ -195,4 +199,49 @@ def test_load_model_whisper_cpp_without_compute_type(device: str) -> None:
 def test_load_model_rejects_invalid_engine_combinations(params: str) -> None:
     with pytest.raises(WorkerError) as info:
         parse_command(f'{{"id":"1","cmd":"load_model","params":{params}}}')
+    assert info.value.code is ErrorCode.INVALID_MESSAGE
+
+
+def _live(cmd: str, **params: object) -> str:
+    return _line({"id": "9", "cmd": cmd, "params": params})
+
+
+def test_parse_live_commands() -> None:
+    start = parse_command(
+        _live("live_start", session_id="s1", tracks=["voce", "outros"], language=None, pause_s=1.0)
+    )
+    assert isinstance(start, LiveStartCommand)
+    assert start.params.test is False
+    audio = parse_command(
+        _live("live_audio", session_id="s1", track="voce", seq=0, pcm16_b64="AAABAA==")
+    )
+    assert isinstance(audio, LiveAudioCommand)
+    assert audio.params.samples().tolist() == [0, 1]
+    assert isinstance(parse_command(_live("live_stop", session_id="s1")), LiveStopCommand)
+    fin = parse_command(_live("live_finalize", dir="/h/s1", tracks=["voce"]))
+    assert isinstance(fin, LiveFinalizeCommand)
+
+
+@pytest.mark.parametrize(
+    "params",
+    [
+        {"session_id": "s", "tracks": ["voce"], "language": None, "pause_s": 0.4},
+        {"session_id": "s", "tracks": ["voce"], "language": None, "pause_s": 3.1},
+        {"session_id": "s", "tracks": [], "language": None, "pause_s": 1.0},
+        {"session_id": "s", "tracks": ["voce", "voce"], "language": None, "pause_s": 1.0},
+        {"session_id": "s", "tracks": ["alguem"], "language": None, "pause_s": 1.0},
+    ],
+)
+def test_live_start_rejects_invalid_params(params: dict[str, object]) -> None:
+    with pytest.raises(WorkerError) as info:
+        parse_command(_live("live_start", **params))
+    assert info.value.code is ErrorCode.INVALID_MESSAGE
+
+
+@pytest.mark.parametrize(
+    "pcm", ["não é base64!", "@@@@", "AA=="]
+)  # inválido; número ímpar de bytes
+def test_live_audio_rejects_invalid_pcm(pcm: str) -> None:
+    with pytest.raises(WorkerError) as info:
+        parse_command(_live("live_audio", session_id="s", track="voce", seq=0, pcm16_b64=pcm))
     assert info.value.code is ErrorCode.INVALID_MESSAGE

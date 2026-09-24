@@ -16,7 +16,7 @@ def test_version_matches_pyproject() -> None:
 
 
 def test_protocol_version_is_two() -> None:
-    assert transcriber_worker.PROTOCOL_VERSION == 2
+    assert transcriber_worker.PROTOCOL_VERSION == 3
 
 
 def test_package_is_installed_outside_project_dir(tmp_path: Path) -> None:

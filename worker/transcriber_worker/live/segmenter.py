@@ -58,6 +58,11 @@ class LiveSegmenter:
     def listening(self) -> bool:
         return self._start is not None
 
+    @property
+    def position(self) -> float:
+        """Segundos já analisados da faixa (linha do tempo)."""
+        return self._pos / RATE
+
     def push(self, pcm: NDArray[np.float32]) -> list[Chunk]:
         data = np.concatenate([self._pending, pcm.astype(np.float32, copy=False)])
         whole = len(data) // WINDOW * WINDOW

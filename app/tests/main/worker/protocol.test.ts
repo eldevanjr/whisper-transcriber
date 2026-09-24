@@ -78,6 +78,6 @@ describe('LineSplitter', () => {
   })
 })
 
-it('versão do protocolo é 2 (engine whisper.cpp)', () => {
-  expect(PROTOCOL_VERSION).toBe(2)
+it('versão do protocolo é 3 (transcrição ao vivo)', () => {
+  expect(PROTOCOL_VERSION).toBe(3)
 })

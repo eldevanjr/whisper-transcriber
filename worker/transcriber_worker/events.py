@@ -67,3 +67,26 @@ def done_event(job_id: str, duration: float, language_detected: str | None) -> E
         "duration": round(duration, 3),
         "language_detected": language_detected,
     }
+
+
+def live_segment_event(session_id: str, track: str, start: float, end: float, text: str) -> Event:
+    return {
+        "type": "live_segment",
+        "session_id": session_id,
+        "track": track,
+        "start": round(start, 3),
+        "end": round(end, 3),
+        "text": text,
+    }
+
+
+def live_listening_event(session_id: str, track: str, active: bool) -> Event:
+    return {"type": "live_listening", "session_id": session_id, "track": track, "active": active}
+
+
+def live_lag_event(session_id: str, seconds: float) -> Event:
+    return {"type": "live_lag", "session_id": session_id, "seconds": round(seconds, 1)}
+
+
+def live_error_event(session_id: str, code: str) -> Event:
+    return {"type": "live_error", "session_id": session_id, "code": code}

@@ -3,7 +3,7 @@ import { AppError, isErrorCode } from '../../shared/errors'
 import { PHASES } from '../../shared/events'
 import type { Device } from '../../shared/settings'
 
-export const PROTOCOL_VERSION = 2
+export const PROTOCOL_VERSION = 3
 
 const ready = z.object({ type: z.literal('ready'), protocol: z.number(), version: z.string() })
 const heartbeat = z.object({ type: z.literal('heartbeat') })
