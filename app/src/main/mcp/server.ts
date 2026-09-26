@@ -6,9 +6,10 @@ import type { Settings } from '../../shared/settings'
 import type { ActivityLog } from './activity'
 import type { ListedTranscription, TranscriptLibrary } from './library'
 import { registerPrompts } from './prompts'
+import { registerActivityTools } from './tools-activity'
 import { MCP_DISABLED_MESSAGE, registerReadTools, type McpContext } from './tools-read'
 
-/** Resultado de um pedido de transcrição pela ponte (spec §9.8); a ponte real é a Task 7. */
+/** Resultado de um pedido de transcrição pela ponte (spec §9.8). */
 export interface TranscribeOutcome {
   id: string
   status: JobStatus
@@ -17,7 +18,7 @@ export interface TranscribeOutcome {
 
 /**
  * Ponte app ↔ processo MCP (spec §7): o app aberto responde atividade, status e transcrever.
- * A Task 4 só define o contrato; a implementação real (e as ferramentas de atividade) é a Task 7.
+ * Implementada por `createLiveBridge` (cliente real) e por dublês de teste.
  */
 export interface BridgePort {
   activity(): Promise<ActivitySnapshot>
@@ -36,6 +37,9 @@ export interface McpServerDeps {
   readSettings: () => Promise<Settings>
   bridge: BridgePort
   version: string
+  /** Relógio e espera injetáveis do `transcribe_file` com `wait` (testes). */
+  now?: () => number
+  sleep?: (ms: number) => Promise<void>
 }
 
 /** Nome do servidor registrado nas configs dos clientes (Global Constraints). */
@@ -52,6 +56,7 @@ export function createMcpServer(deps: McpServerDeps): McpServer {
     clientName: () => clientNameOf(server)
   }
   registerReadTools(server, context)
+  registerActivityTools(server, context, deps.bridge, { now: deps.now, sleep: deps.sleep })
   registerPrompts(server, context)
   registerResources(server, context)
   return server

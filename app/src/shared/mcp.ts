@@ -44,6 +44,7 @@ export const PendingJobSchema = z.object({
   title: z.string(),
   requestedBy: z.string().optional()
 })
+export type PendingJob = z.infer<typeof PendingJobSchema>
 
 /** Sessão ao vivo em andamento (spec §7.4 / §9.6). */
 export const LiveActivitySchema = z.object({
@@ -52,6 +53,7 @@ export const LiveActivitySchema = z.object({
   startedAt: z.string(),
   tracks: z.array(z.enum(TRACKS)).optional()
 })
+export type LiveActivity = z.infer<typeof LiveActivitySchema>
 
 /** Retrato do que o app está fazendo, servido pela ponte e por `get_activity` (spec §9.6). */
 export const ActivitySnapshotSchema = z.object({

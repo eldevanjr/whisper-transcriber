@@ -1,7 +1,9 @@
 import { readFile, rm, writeFile } from 'node:fs/promises'
+import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 import { PassThrough } from 'node:stream'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { BridgeClientLike } from '../../../src/main/mcp/bridge-client'
 import {
   closedAppBridge,
   isMcpMode,
@@ -200,6 +202,23 @@ describe('runMcp lifecycle', () => {
     await runMcp(context.deps)
     context.stdin.emit('end')
     expect(context.app.calls).toContain('quit')
+  })
+
+  it('uses the injected bridge client, launcher target and spawn', async () => {
+    const context = await trackedHarness()
+    const client: BridgeClientLike = {
+      connect: async () => ({ appVersion: '1', ready: true }),
+      activity: async () => ({ appRunning: false, current: null, pending: [], live: null }),
+      status: async () => null,
+      transcribe: async () => ({ id: randomUUID() })
+    }
+    await runMcp({
+      ...context.deps,
+      client,
+      launcherTarget: { command: '/app', args: [] },
+      spawn: vi.fn()
+    })
+    expect(context.app.calls).not.toContain('requestSingleInstanceLock')
   })
 })
 

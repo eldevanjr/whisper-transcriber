@@ -121,6 +121,11 @@ export class TranscriptLibrary {
     return { items, total: matched.length }
   }
 
+  /** Um item do histórico no mesmo formato de `list` (spec §9.6/§9.7). */
+  async get(id: string): Promise<ListedTranscription> {
+    return this.listItem(await this.history.get(id))
+  }
+
   async search(query: string, filter: SearchFilter = {}): Promise<SearchHit[]> {
     if (query.length < 2 || query.length > 200) {
       throw new AppError('INVALID_REQUEST', 'A busca precisa ter de 2 a 200 caracteres')

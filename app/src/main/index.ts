@@ -36,6 +36,8 @@ import {
 } from './live/system-audio'
 import { createMediaHandler, MEDIA_SCHEME } from './media-protocol'
 import { isMcpMode, runMcp } from './mcp/entry'
+import { ActivityTracker } from './mcp/activity-tracker'
+import { startBridgeServer } from './mcp/bridge-server'
 import { launcherTarget, writeLauncher } from './mcp/launcher'
 import { appPaths, modelDir } from './paths'
 import { TranscriptionQueue } from './queue/queue'
@@ -106,6 +108,8 @@ async function main(): Promise<void> {
   if (settings.recovered)
     logger.warn('settings.json inválido: padrão restaurado (backup em settings.bak.json)')
   const history = new HistoryStore(paths.history)
+  // Retrato do que o app está fazendo, servido pela ponte do MCP (spec §7.4).
+  const tracker = new ActivityTracker()
   let window: BrowserWindow | null = null
   const send = (channel: string, payload: unknown): void => {
     window?.webContents.send(channel, payload)
@@ -163,6 +167,7 @@ async function main(): Promise<void> {
     modelDir: (id, format) => modelDir(paths, id, format),
     cudaLibDir: paths.cuda,
     emit: (event) => {
+      tracker.onQueueEvent(event)
       send(EVENTS.queue, event)
     },
     logger,
@@ -174,12 +179,26 @@ async function main(): Promise<void> {
     history,
     settings,
     emit: (event) => {
+      tracker.onLive(event)
       send(EVENTS.live, event)
     },
     onItem: (meta) => {
+      tracker.onQueueEvent({ type: 'job', meta })
       send(EVENTS.queue, { type: 'job', meta })
     },
     logger
+  })
+  // Ponte local com o processo --mcp (spec §7): só socket/pipe, nenhuma porta de rede.
+  const bridgeServer = await startBridgeServer({
+    paths,
+    tracker,
+    queue,
+    settings,
+    platform: process.platform,
+    version: app.getVersion()
+  }).catch((error: unknown) => {
+    logger.error(`[mcp] não foi possível subir a ponte: ${String(error)}`)
+    return { address: '', close: () => Promise.resolve() }
   })
 
   protocol.handle(MEDIA_SCHEME, createMediaHandler({ history }))
@@ -313,6 +332,7 @@ async function main(): Promise<void> {
   app.on('before-quit', () => {
     queue.shutdown()
     worker.dispose()
+    void bridgeServer.close()
   })
   app.on('window-all-closed', () => {
     app.quit()
@@ -327,7 +347,14 @@ async function boot(): Promise<void> {
       stdin: process.stdin,
       stdout: process.stdout,
       paths: appPaths(app.getPath('userData')),
-      logger: log
+      logger: log,
+      launcherTarget: launcherTarget({
+        platform: process.platform,
+        execPath: process.execPath,
+        env: process.env,
+        isPackaged: app.isPackaged,
+        appPath: app.getAppPath()
+      })
     })
     return
   }

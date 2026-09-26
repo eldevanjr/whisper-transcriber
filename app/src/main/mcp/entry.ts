@@ -12,6 +12,9 @@ import { readJson } from '../fs-utils'
 import { HistoryStore } from '../history/store'
 import type { AppPaths } from '../paths'
 import { ActivityLog } from './activity'
+import { BridgeClient, createLiveBridge, type BridgeClientLike } from './bridge-client'
+import { createAppRunner, type SpawnFn } from './launch-app'
+import type { LauncherTarget } from './launcher'
 import { TranscriptLibrary } from './library'
 import { createMcpServer, type BridgePort } from './server'
 
@@ -36,6 +39,10 @@ export interface McpDeps {
   stdout: Writable
   paths: AppPaths
   logger: McpLogger
+  /** Cliente da ponte e alvo do lançador; os testes injetam para exercitar o adaptador. */
+  client?: BridgeClientLike
+  launcherTarget?: LauncherTarget | null
+  spawn?: SpawnFn
 }
 
 /** Tamanho máximo de `logs/mcp.log` (spec §12). */
@@ -99,11 +106,17 @@ export async function runMcp(deps: McpDeps): Promise<void> {
     settings.uiLanguage === null
       ? resolveSpeakerLabels(null, app.getLocale())
       : resolveSpeakerLabels(settings.uiLanguage)
+  const client = deps.client ?? new BridgeClient(paths)
+  const ensureRunning = createAppRunner({
+    launcherTarget: deps.launcherTarget ?? null,
+    client,
+    ...(deps.spawn === undefined ? {} : { spawn: deps.spawn })
+  })
   const server = createMcpServer({
     library: new TranscriptLibrary(new HistoryStore(paths.history), labels),
     activity: new ActivityLog(paths.mcpActivity),
     readSettings,
-    bridge: closedAppBridge,
+    bridge: createLiveBridge({ client, ensureRunning }),
     version: app.getVersion()
   })
   await server.connect(new StdioServerTransport(stdin, stdout))

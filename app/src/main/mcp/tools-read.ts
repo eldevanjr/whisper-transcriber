@@ -36,7 +36,7 @@ export interface McpContext {
   clientName: () => string
 }
 
-interface ToolOutcome {
+export interface ToolOutcome {
   result: CallToolResult
   id?: string
   title?: string
@@ -244,7 +244,7 @@ function toSearchHit(hit: SearchHit): Record<string, unknown> {
   return item
 }
 
-async function runTool(
+export async function runTool(
   ctx: McpContext,
   tool: string,
   id: string | undefined,
@@ -277,11 +277,11 @@ function activityLine(
   return line
 }
 
-function success(structured: Record<string, unknown>, text: string): CallToolResult {
+export function success(structured: Record<string, unknown>, text: string): CallToolResult {
   return { content: [{ type: 'text', text }], structuredContent: structured }
 }
 
-function failure(code: ErrorCode, message: string): CallToolResult {
+export function failure(code: ErrorCode, message: string): CallToolResult {
   return { isError: true, content: [{ type: 'text', text: `${code}: ${message}` }] }
 }
 

@@ -32,6 +32,8 @@ export interface NewJob {
   mediaKind: MediaKind
   model: ModelId
   language: string | null
+  /** Cliente MCP que pediu a transcrição (spec §12); ausente = pedido pelo app. */
+  requestedBy?: string
 }
 
 export interface NewLiveSession {
@@ -76,7 +78,8 @@ export class HistoryStore {
       languageDetected: null,
       duration: null,
       error: null,
-      kind: 'file'
+      kind: 'file',
+      ...(job.requestedBy === undefined ? {} : { requestedBy: job.requestedBy })
     }
     await writeJsonAtomic(this.paths(meta.id).meta, meta)
     return meta
