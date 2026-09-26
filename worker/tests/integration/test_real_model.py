@@ -17,6 +17,8 @@ from transcriber_worker.protocol import (
     TranscribeParams,
 )
 
+FALA = Path(__file__).parents[1] / "fixtures" / "fala-curta.wav"
+
 pytestmark = [pytest.mark.integration, pytest.mark.timeout(600)]
 
 
@@ -90,6 +92,27 @@ def test_whisper_cpp_self_test_and_transcription(tiny_ggml_dir: str, tmp_path: P
     dispatcher.handle(LoadModelCommand(id="load", cmd="load_model", params=params))
     dispatcher.handle(SelfTestCommand(id="st", cmd="self_test"))
     assert [e["type"] for e in events if e["type"] in ("result", "error")] == ["result", "result"]
+    # Fala de verdade: o VAD deixa passar e o modelo detecta o idioma.
+    transcribe = TranscribeParams(
+        job_id="cpp",
+        input_path=str(FALA),
+        language=None,
+        audio_out_path=str(tmp_path / "h" / "audio.m4a"),
+    )
+    dispatcher.handle(TranscribeCommand(id="t", cmd="transcribe", params=transcribe))
+    done = next(e for e in events if e["type"] == "done")
+    assert done["duration"] == pytest.approx(7.0, abs=0.05)
+    assert isinstance(done["language_detected"], str)
+    assert [e for e in events if e["type"] == "segment"]
+    assert [e for e in events if e["type"] == "progress"][-1]["pct"] == 100.0
+
+
+def test_whisper_cpp_skips_audio_without_speech(tiny_ggml_dir: str, tmp_path: Path) -> None:
+    # Tom sem fala (como a faixa muda de "Você" numa reunião): nada de texto inventado.
+    events: list[Event] = []
+    dispatcher = Dispatcher(Engine(), events.append)
+    params = LoadModelParams(model_dir=tiny_ggml_dir, device="cpu", engine="whisper-cpp")
+    dispatcher.handle(LoadModelCommand(id="load", cmd="load_model", params=params))
     source = make_wav(tmp_path / "três segundos.wav", seconds=3.0)
     transcribe = TranscribeParams(
         job_id="cpp",
@@ -100,5 +123,6 @@ def test_whisper_cpp_self_test_and_transcription(tiny_ggml_dir: str, tmp_path: P
     dispatcher.handle(TranscribeCommand(id="t", cmd="transcribe", params=transcribe))
     done = next(e for e in events if e["type"] == "done")
     assert done["duration"] == pytest.approx(3.0, abs=0.05)
-    assert isinstance(done["language_detected"], str)
+    assert done["language_detected"] is None
+    assert [e for e in events if e["type"] == "segment"] == []
     assert [e for e in events if e["type"] == "progress"][-1]["pct"] == 100.0
