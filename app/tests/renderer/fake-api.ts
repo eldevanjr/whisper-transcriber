@@ -259,7 +259,14 @@ export class FakeApi implements TranscriberApi {
 }
 
 export function makeClientStatus(id: McpClientId, state: ClientState): ClientStatus {
-  return { id, name: MCP_CLIENT_NAMES[id], state, lastUsedAt: null, restartNeeded: false }
+  return {
+    id,
+    name: MCP_CLIENT_NAMES[id],
+    state,
+    lastUsedAt: null,
+    restartNeeded: false,
+    manual: { kind: 'json', text: `{ "${id}": "config manual" }` }
+  }
 }
 
 function subscribe<T>(listeners: Set<Listener<T>>, callback: Listener<T>): () => void {

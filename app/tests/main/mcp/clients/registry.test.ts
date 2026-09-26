@@ -16,8 +16,7 @@ afterEach(async () => {
   await rm(root, { recursive: true, force: true })
 })
 
-const desktopFile = (): string =>
-  join(root, '.config', 'Claude', 'claude_desktop_config.json')
+const desktopFile = (): string => join(root, '.config', 'Claude', 'claude_desktop_config.json')
 
 function listDeps(lastUse: Map<string, string> = new Map<string, string>()) {
   return {
@@ -37,13 +36,15 @@ describe('createConnectors', () => {
 })
 
 describe('listClients', () => {
-  it('devolve todos ausentes, sem uso e sem reinício', async () => {
+  it('devolve todos ausentes, sem uso, sem reinício e com config manual', async () => {
     const statuses = await listClients(listDeps())
     expect(statuses).toHaveLength(MCP_CLIENT_IDS.length)
     expect(statuses.every((status) => status.state === 'missing')).toBe(true)
     expect(statuses.every((status) => status.lastUsedAt === null)).toBe(true)
     expect(statuses.every((status) => !status.restartNeeded)).toBe(true)
     expect(statuses.every((status) => status.error === undefined)).toBe(true)
+    // A config manual também serve para quem está ausente (id + caminho do lançador bastam).
+    expect(statuses.every((status) => status.manual.text.includes(LAUNCHER))).toBe(true)
   })
 
   it('marca conectado, reinício e último uso do Claude Desktop', async () => {
@@ -56,13 +57,15 @@ describe('listClients', () => {
     const used = '2026-09-26T12:00:00.000Z'
     const statuses = await listClients(listDeps(new Map([['claude-desktop', used]])))
     const desktop = statuses.find((status) => status.id === 'claude-desktop')
-    expect(desktop).toEqual({
+    expect(desktop).toMatchObject({
       id: 'claude-desktop',
       name: 'Claude Desktop',
       state: 'connected',
       lastUsedAt: used,
       restartNeeded: true
     })
+    expect(desktop?.manual.kind).toBe('json')
+    expect(desktop?.manual.text).toContain(LAUNCHER)
   })
 
   it('inclui o erro do conector quando a config é inválida', async () => {

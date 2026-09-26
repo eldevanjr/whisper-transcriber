@@ -3,7 +3,14 @@ import { buildMcpStatus } from '../../../src/main/mcp/status'
 import type { ClientStatus } from '../../../src/shared/mcp'
 
 const CLIENTS: ClientStatus[] = [
-  { id: 'codex', name: 'Codex', state: 'connected', lastUsedAt: null, restartNeeded: false }
+  {
+    id: 'codex',
+    name: 'Codex',
+    state: 'connected',
+    lastUsedAt: null,
+    restartNeeded: false,
+    manual: { kind: 'toml', text: '[mcp_servers.whisper-transcriber]' }
+  }
 ]
 
 describe('buildMcpStatus', () => {

@@ -45,6 +45,12 @@ export interface ClientStatusError {
   detail?: string
 }
 
+/** Config manual pronta de um cliente (spec §11.2), mostrada no cartão com "Copiar". */
+export interface McpManualConfig {
+  kind: 'command' | 'json' | 'toml'
+  text: string
+}
+
 /** Retrato de um cliente para a tela (spec §10.2). */
 export interface ClientStatus {
   id: McpClientId
@@ -52,6 +58,7 @@ export interface ClientStatus {
   state: ClientState
   lastUsedAt: string | null
   restartNeeded: boolean
+  manual: McpManualConfig
   error?: ClientStatusError
 }
 

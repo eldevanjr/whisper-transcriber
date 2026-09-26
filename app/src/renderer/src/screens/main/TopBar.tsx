@@ -1,4 +1,4 @@
-import { Settings as SettingsIcon, Square } from 'lucide-react'
+import { Plug, Settings as SettingsIcon, Square } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { formatTime } from '../../../../shared/format'
@@ -111,6 +111,13 @@ export function TopBar() {
         {t('app.name')}
       </span>
       {current === null ? <span className="flex-1" /> : <CurrentJob jobId={current} />}
+      <IconButton
+        label={t('main.connectAi')}
+        icon={Plug}
+        onClick={() => {
+          openSettings('ai')
+        }}
+      />
       <IconButton
         label={t('main.settings')}
         icon={SettingsIcon}

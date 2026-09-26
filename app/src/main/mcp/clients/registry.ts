@@ -77,7 +77,8 @@ export async function listClients(deps: ListClientsDeps): Promise<ClientStatus[]
         name: connector.name,
         state: info.state,
         lastUsedAt: lastUse.get(connector.id) ?? null,
-        restartNeeded: connector.needsRestart && info.state === 'connected'
+        restartNeeded: connector.needsRestart && info.state === 'connected',
+        manual: connector.manual()
       }
       if (info.error !== undefined) status.error = info.error
       return status

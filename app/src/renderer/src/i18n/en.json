@@ -148,6 +148,7 @@
     },
     "drop": "Drop to transcribe",
     "settings": "Settings",
+    "connectAi": "Connect AIs",
     "cancel": "Cancel transcription",
     "cancelTitle": "Cancel the transcription?",
     "cancelMessage": "What has been transcribed from this file so far will be discarded.",
@@ -203,6 +204,7 @@
       "general": "General",
       "transcription": "Transcription",
       "live": "Live",
+      "ai": "AI assistants (MCP)",
       "storage": "Storage",
       "help": "Help",
       "about": "About",
@@ -282,6 +284,72 @@
       "count": "{{count}} components",
       "backToList": "Back to list",
       "openPage": "Open project page"
+    },
+    "ai": {
+      "intro": "Let AI assistants on your computer read your transcriptions and request new ones. Nothing leaves your computer.",
+      "access": {
+        "title": "AI access",
+        "enabled": "Let AIs read my transcriptions",
+        "transcribe": "Let AIs transcribe files",
+        "ready": "Ready · {{count}} AIs connected",
+        "off": "Off",
+        "problem": "Problem: {{reason}}",
+        "test": "Test connection",
+        "testing": "Testing…",
+        "testOk": "Working ({{count}} tools)",
+        "testError": "Failed: {{message}}"
+      },
+      "clients": {
+        "title": "AIs on this computer",
+        "missing": "Not found",
+        "found": "Found",
+        "connected": "Connected",
+        "used": "used {{time}}",
+        "restart": "restart {{name}} to use",
+        "connect": "Connect",
+        "connecting": "Connecting…",
+        "disconnect": "Disconnect",
+        "disconnecting": "Disconnecting…",
+        "manual": "Manual config",
+        "copy": "Copy",
+        "copied": "✓ Copied",
+        "configInvalid": "The {{name}} config file has an error; use the manual config.",
+        "configHasComments": "The {{name}} file has comments; to avoid losing them, use the manual config."
+      },
+      "confirm": {
+        "title": "Allow access?",
+        "message": "Let AIs read your transcriptions? You can turn it off anytime.",
+        "confirm": "Allow and connect",
+        "cancel": "Cancel"
+      },
+      "other": {
+        "title": "Other AI",
+        "description": "Any MCP-compatible (stdio) app works with this command:",
+        "command": "Command",
+        "json": "Generic JSON (mcpServers)",
+        "copyCommand": "Copy command",
+        "copyJson": "Copy JSON"
+      },
+      "web": {
+        "title": "ChatGPT and claude.ai (web)",
+        "description": "These assistants run in the cloud and can only reach servers published on the internet. To keep your transcriptions on your computer, they are not supported."
+      },
+      "activity": {
+        "title": "Recent activity",
+        "empty": "No AI has used it yet.",
+        "line": "{{client}} · {{tool}} · {{time}}",
+        "lineWithTitle": "{{client}} · {{tool}} “{{title}}” · {{time}}",
+        "tools": {
+          "list_transcriptions": "listed transcriptions",
+          "search_transcriptions": "searched transcriptions",
+          "get_transcription": "read a transcription",
+          "get_audio": "fetched an audio",
+          "export_transcription": "exported a transcription",
+          "get_activity": "checked the activity",
+          "get_status": "tracked a transcription",
+          "transcribe_file": "requested a transcription"
+        }
+      }
     }
   },
   "help": {

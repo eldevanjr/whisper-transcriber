@@ -148,6 +148,7 @@
     },
     "drop": "Solte para transcrever",
     "settings": "Configurações",
+    "connectAi": "Conectar IAs",
     "cancel": "Cancelar transcrição",
     "cancelTitle": "Cancelar a transcrição?",
     "cancelMessage": "O que já foi transcrito deste arquivo será descartado.",
@@ -203,6 +204,7 @@
       "general": "Geral",
       "transcription": "Transcrição",
       "live": "Ao vivo",
+      "ai": "IAs (MCP)",
       "storage": "Armazenamento",
       "help": "Ajuda",
       "about": "Sobre",
@@ -282,6 +284,72 @@
       "count": "{{count}} componentes",
       "backToList": "Voltar à lista",
       "openPage": "Abrir página do projeto"
+    },
+    "ai": {
+      "intro": "Deixe assistentes de IA do seu computador lerem suas transcrições e pedirem novas. Nada sai do seu computador.",
+      "access": {
+        "title": "Acesso de IAs",
+        "enabled": "Permitir que IAs leiam minhas transcrições",
+        "transcribe": "Permitir que IAs transcrevam arquivos",
+        "ready": "Pronto · {{count}} IAs conectadas",
+        "off": "Desligado",
+        "problem": "Com problema: {{reason}}",
+        "test": "Testar conexão",
+        "testing": "Testando…",
+        "testOk": "Funcionando ({{count}} ferramentas)",
+        "testError": "Falhou: {{message}}"
+      },
+      "clients": {
+        "title": "IAs neste computador",
+        "missing": "Não encontrado",
+        "found": "Encontrado",
+        "connected": "Conectado",
+        "used": "usado {{time}}",
+        "restart": "reinicie o {{name}} para usar",
+        "connect": "Conectar",
+        "connecting": "Conectando…",
+        "disconnect": "Desconectar",
+        "disconnecting": "Desconectando…",
+        "manual": "Config manual",
+        "copy": "Copiar",
+        "copied": "✓ Copiado",
+        "configInvalid": "O arquivo de configuração do {{name}} tem um erro; use a config manual.",
+        "configHasComments": "O arquivo do {{name}} tem comentários; para não perdê-los, use a config manual."
+      },
+      "confirm": {
+        "title": "Permitir acesso?",
+        "message": "Permitir que IAs leiam suas transcrições? Você pode desligar quando quiser.",
+        "confirm": "Permitir e conectar",
+        "cancel": "Cancelar"
+      },
+      "other": {
+        "title": "Outra IA",
+        "description": "Qualquer app compatível com MCP (stdio) funciona com este comando:",
+        "command": "Comando",
+        "json": "JSON genérico (mcpServers)",
+        "copyCommand": "Copiar comando",
+        "copyJson": "Copiar JSON"
+      },
+      "web": {
+        "title": "ChatGPT e claude.ai (web)",
+        "description": "Esses assistentes rodam na nuvem e só conseguem se conectar a servidores publicados na internet. Para manter suas transcrições no seu computador, eles não são suportados."
+      },
+      "activity": {
+        "title": "Atividade recente",
+        "empty": "Nenhuma IA usou ainda.",
+        "line": "{{client}} · {{tool}} · {{time}}",
+        "lineWithTitle": "{{client}} · {{tool}} “{{title}}” · {{time}}",
+        "tools": {
+          "list_transcriptions": "listou as transcrições",
+          "search_transcriptions": "buscou nas transcrições",
+          "get_transcription": "leu uma transcrição",
+          "get_audio": "pegou um áudio",
+          "export_transcription": "exportou uma transcrição",
+          "get_activity": "viu a atividade",
+          "get_status": "acompanhou uma transcrição",
+          "transcribe_file": "pediu uma transcrição"
+        }
+      }
     }
   },
   "help": {

@@ -21,7 +21,14 @@ const APP_FRAME = { processId: 1, routingId: 1 }
 const TRUSTED: IpcEventLike = { sender: 'app', senderFrame: APP_FRAME }
 
 function clientStatus(id: McpClientId, state: ClientState): ClientStatus {
-  return { id, name: MCP_CLIENT_NAMES[id], state, lastUsedAt: null, restartNeeded: false }
+  return {
+    id,
+    name: MCP_CLIENT_NAMES[id],
+    state,
+    lastUsedAt: null,
+    restartNeeded: false,
+    manual: { kind: 'json', text: `{ "${id}": "config manual" }` }
+  }
 }
 
 function setup(settingsOverride: Partial<Settings> = {}) {

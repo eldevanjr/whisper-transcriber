@@ -1,9 +1,12 @@
 import { ArrowLeft } from 'lucide-react'
+import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
+import type { Settings } from '../../../../shared/settings'
 import { Button } from '../../components/Button'
 import { useAppStore } from '../../providers'
 import type { SettingsSection } from '../../store/app-store'
 import { AboutSection } from './AboutSection'
+import { AiSection } from './AiSection'
 import { GeneralSection } from './GeneralSection'
 import { HelpSection } from './HelpSection'
 import { LicensesSection } from './LicensesSection'
@@ -15,31 +18,27 @@ const SECTIONS: readonly SettingsSection[] = [
   'general',
   'transcription',
   'live',
+  'ai',
   'storage',
   'help',
   'about',
   'licenses'
 ]
 
+const SECTIONS_CONTENT: Record<SettingsSection, (settings: Settings) => ReactNode> = {
+  general: (settings) => <GeneralSection settings={settings} />,
+  transcription: (settings) => <TranscriptionSection settings={settings} />,
+  live: () => <LiveSection />,
+  ai: () => <AiSection />,
+  storage: () => <StorageSection />,
+  help: () => <HelpSection />,
+  about: () => <AboutSection />,
+  licenses: () => <LicensesSection />
+}
+
 function Content({ section }: { section: SettingsSection }) {
   const settings = useAppStore((s) => s.settings)
-  if (!settings) return null
-  switch (section) {
-    case 'general':
-      return <GeneralSection settings={settings} />
-    case 'transcription':
-      return <TranscriptionSection settings={settings} />
-    case 'live':
-      return <LiveSection />
-    case 'storage':
-      return <StorageSection />
-    case 'help':
-      return <HelpSection />
-    case 'about':
-      return <AboutSection />
-    case 'licenses':
-      return <LicensesSection />
-  }
+  return settings ? SECTIONS_CONTENT[section](settings) : null
 }
 
 export function SettingsScreen() {
