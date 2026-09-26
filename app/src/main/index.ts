@@ -45,6 +45,7 @@ import { createCli } from './mcp/clients/cli'
 import { createConnectors, listClients, type ConnectorDeps } from './mcp/clients/registry'
 import { launcherStatus, launcherTarget, writeLauncher } from './mcp/launcher'
 import { runSelfTest } from './mcp/self-test'
+import { buildMcpStatus } from './mcp/status'
 import { appPaths, modelDir } from './paths'
 import { TranscriptionQueue } from './queue/queue'
 import { applyCsp, isAllowedExternalUrl, isAllowedNavigation, isTrustedSender } from './security'
@@ -283,12 +284,13 @@ async function main(): Promise<void> {
     externalUrls: licenseUrls(licensesJson),
     live,
     mcp: {
-      status: async () => ({
-        launcherOk: launcherStatus().ok,
-        launcherPath: paths.mcpLauncher,
-        bridgeOk: bridgeServer.address !== '',
-        clients: await listClients({ ...connectorDeps, activity: activityLog })
-      }),
+      status: async () =>
+        buildMcpStatus({
+          launcher: launcherStatus(),
+          launcherPath: paths.mcpLauncher,
+          bridgeOk: bridgeServer.address !== '',
+          clients: await listClients({ ...connectorDeps, activity: activityLog })
+        }),
       connect: (id) => runConnectorAction(connectorDeps, activityLog, id, 'connect'),
       disconnect: (id) => runConnectorAction(connectorDeps, activityLog, id, 'disconnect'),
       test: () => runSelfTest(paths.mcpLauncher),

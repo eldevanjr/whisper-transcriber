@@ -6,7 +6,13 @@ import {
   type Services
 } from '../../../src/main/ipc/handlers'
 import { AppError } from '../../../src/shared/errors'
-import { IPC, SEND } from '../../../src/shared/ipc'
+import { IPC, SEND, type McpStatus } from '../../../src/shared/ipc'
+import {
+  MCP_CLIENT_NAMES,
+  type ClientState,
+  type ClientStatus,
+  type McpClientId
+} from '../../../src/shared/mcp'
 import { DEFAULT_SETTINGS, type Settings } from '../../../src/shared/settings'
 
 const JOB = '11111111-1111-4111-8111-111111111111'
@@ -14,8 +20,8 @@ const LAUNCHER = '/home/u/.config/Whisper Transcriber/mcp/whisper-transcriber-mc
 const APP_FRAME = { processId: 1, routingId: 1 }
 const TRUSTED: IpcEventLike = { sender: 'app', senderFrame: APP_FRAME }
 
-function clientStatus(id: string, state: string) {
-  return { id, name: 'IA', state, lastUsedAt: null, restartNeeded: false }
+function clientStatus(id: McpClientId, state: ClientState): ClientStatus {
+  return { id, name: MCP_CLIENT_NAMES[id], state, lastUsedAt: null, restartNeeded: false }
 }
 
 function setup(settingsOverride: Partial<Settings> = {}) {
@@ -92,16 +98,17 @@ function setup(settingsOverride: Partial<Settings> = {}) {
       audio: vi.fn()
     },
     mcp: {
-      status: vi.fn(() =>
+      status: vi.fn((): Promise<McpStatus> =>
         Promise.resolve({
           launcherOk: true,
+          launcherError: null,
           launcherPath: LAUNCHER,
           bridgeOk: true,
           clients: [clientStatus('codex', 'connected')]
         })
       ),
-      connect: vi.fn((id: string) => Promise.resolve(clientStatus(id, 'connected'))),
-      disconnect: vi.fn((id: string) => Promise.resolve(clientStatus(id, 'found'))),
+      connect: vi.fn((id: McpClientId) => Promise.resolve(clientStatus(id, 'connected'))),
+      disconnect: vi.fn((id: McpClientId) => Promise.resolve(clientStatus(id, 'found'))),
       test: vi.fn(() => Promise.resolve({ ok: true, tools: 8 })),
       activity: vi.fn(() =>
         Promise.resolve([
@@ -399,6 +406,7 @@ describe('IPC das IAs (MCP)', () => {
     expect(await call(IPC.mcpStatus)).toEqual(
       ok({
         launcherOk: true,
+        launcherError: null,
         launcherPath: LAUNCHER,
         bridgeOk: true,
         clients: [clientStatus('codex', 'connected')]
@@ -411,6 +419,26 @@ describe('IPC das IAs (MCP)', () => {
     expect(services.mcp.status).toHaveBeenCalledTimes(1)
     expect(services.mcp.activity).toHaveBeenCalledTimes(1)
     expect(services.mcp.test).toHaveBeenCalledTimes(1)
+  })
+
+  it('status carrega o motivo quando o lançador falhou', async () => {
+    const { call, services } = setup()
+    services.mcp.status.mockResolvedValueOnce({
+      launcherOk: false,
+      launcherError: 'sem permissão de escrita',
+      launcherPath: LAUNCHER,
+      bridgeOk: false,
+      clients: []
+    })
+    expect(await call(IPC.mcpStatus)).toEqual(
+      ok({
+        launcherOk: false,
+        launcherError: 'sem permissão de escrita',
+        launcherPath: LAUNCHER,
+        bridgeOk: false,
+        clients: []
+      })
+    )
   })
 
   it('id fora da lista ou origem não confiável → INVALID_REQUEST', async () => {

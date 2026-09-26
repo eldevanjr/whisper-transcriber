@@ -132,6 +132,8 @@ export interface AppInfo {
 /** Retrato da seção de IAs (spec §10.2). */
 export interface McpStatus {
   launcherOk: boolean
+  /** Motivo quando o lançador não foi gravado ("Com problema: <motivo>"); null quando OK. */
+  launcherError: string | null
   launcherPath: string
   bridgeOk: boolean
   clients: ClientStatus[]

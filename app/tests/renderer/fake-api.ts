@@ -238,6 +238,7 @@ export class FakeApi implements TranscriberApi {
   mcpStatus = vi.fn((): Promise<McpStatus> =>
     Promise.resolve({
       launcherOk: true,
+      launcherError: null,
       launcherPath: '/home/u/.config/Whisper Transcriber/mcp/whisper-transcriber-mcp',
       bridgeOk: true,
       clients: []
