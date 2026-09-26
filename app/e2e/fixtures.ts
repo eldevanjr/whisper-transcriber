@@ -1,13 +1,26 @@
+import { execFileSync } from 'node:child_process'
 import { createHash, randomBytes } from 'node:crypto'
-import { mkdtempSync, writeFileSync } from 'node:fs'
+import { copyFileSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { Client } from '@modelcontextprotocol/sdk/client/index.js'
+import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { _electron as electron, type ElectronApplication, type Page } from '@playwright/test'
 
 // O Playwright compila os testes como CommonJS: __dirname existe.
 const HERE = __dirname
 const APP_DIR = join(HERE, '..')
 const FAKE_WORKER = join(HERE, 'fake-worker.mjs')
+
+/** Executável do Electron do projeto; é o comando que o lançador usa em desenvolvimento. */
+export const ELECTRON_BIN = join(APP_DIR, 'node_modules', 'electron', 'dist', 'electron')
+/** Mesma linha do worker falso que `launch` passa ao app. */
+export const FAKE_WORKER_COMMAND = JSON.stringify({
+  command: process.execPath,
+  args: [FAKE_WORKER]
+})
+/** Fixture de áudio real usada nos testes de transcrição (silêncio válido em m4a). */
+export const SILENCE_FIXTURE = join(HERE, 'fixtures', 'silence.m4a')
 
 export interface AppHandle {
   app: ElectronApplication
@@ -44,6 +57,16 @@ export function mediaFile(name: string): string {
   return path
 }
 
+/**
+ * Cópia da fixture `silence.m4a` numa pasta com "lento" no nome: o worker falso vê o trecho
+ * "lento" no caminho e desacelera (1,5 s por trecho), dando tempo de observar o `pct` subindo.
+ */
+export function slowMediaFile(name = 'silence.m4a'): string {
+  const path = join(tempDir('wt-lento-'), name)
+  copyFileSync(SILENCE_FIXTURE, path)
+  return path
+}
+
 export async function launch(
   userData: string,
   env: Record<string, string> = {}
@@ -68,7 +91,7 @@ export async function launch(
     env: {
       ...base,
       WT_USER_DATA: userData,
-      WT_WORKER_COMMAND: JSON.stringify({ command: process.execPath, args: [FAKE_WORKER] }),
+      WT_WORKER_COMMAND: FAKE_WORKER_COMMAND,
       ...env
     }
   })
@@ -158,4 +181,92 @@ export async function mockNetwork(
       return Promise.resolve(new Response('não encontrado', { status: 404 }))
     }) as typeof fetch
   }, files)
+}
+
+export interface McpHandle {
+  client: Client
+  userData: string
+  close(): Promise<void>
+}
+
+/**
+ * Sobe o processo `--mcp` do build (`out/`, via `package.json`) com o mesmo `userData` do teste e
+ * conecta um cliente do SDK por stdio, como uma IA local faria pelo lançador. O processo não cria
+ * janela; quando fechado, o próprio `transcribe_file` abre o app.
+ */
+export async function connectMcp(
+  userData: string,
+  options: { clientName?: string; env?: Record<string, string> } = {}
+): Promise<McpHandle> {
+  const base = Object.fromEntries(
+    Object.entries(process.env).filter(
+      (entry): entry is [string, string] =>
+        entry[0] !== 'ELECTRON_RENDERER_URL' && entry[1] !== undefined
+    )
+  )
+  const transport = new StdioClientTransport({
+    command: ELECTRON_BIN,
+    args: [APP_DIR, '--mcp'],
+    stderr: 'ignore',
+    env: {
+      ...base,
+      WT_USER_DATA: userData,
+      WT_WORKER_COMMAND: FAKE_WORKER_COMMAND,
+      // Sem o chrome-sandbox SUID neste ambiente, o Electron precisa disto (vale para o app aberto).
+      ELECTRON_DISABLE_SANDBOX: '1',
+      ...options.env
+    }
+  })
+  const client = new Client(
+    { name: options.clientName ?? 'claude-code', version: '1.0.0' },
+    { capabilities: {} }
+  )
+  await client.connect(transport)
+  return { client, userData, close: () => client.close() }
+}
+
+/** Títulos das janelas X11 do app; usada para ver que o `transcribe_file` abriu a janela. */
+export function appWindowTitles(): string {
+  try {
+    const ids = execFileSync('xdotool', ['search', '--name', 'Whisper Transcriber'])
+      .toString()
+      .trim()
+      .split('\n')
+      .filter(Boolean)
+    return ids
+      .map((id) => execFileSync('xdotool', ['getwindowname', id]).toString().trim())
+      .join('\n')
+  } catch {
+    return ''
+  }
+}
+
+/** Encerra o app que o processo MCP abriu (pid no `bridge.json`) para não vazar entre testes. */
+export async function killSpawnedApp(userData: string): Promise<void> {
+  let pid: number
+  try {
+    pid = (
+      JSON.parse(readFileSync(join(userData, 'mcp', 'bridge.json'), 'utf8')) as { pid: number }
+    ).pid
+  } catch {
+    return
+  }
+  try {
+    process.kill(pid, 'SIGTERM')
+  } catch {
+    return
+  }
+  for (let attempt = 0; attempt < 50; attempt++) {
+    await new Promise((resolve) => setTimeout(resolve, 100))
+    try {
+      process.kill(pid, 0)
+    } catch {
+      return
+    }
+  }
+  try {
+    process.kill(pid, 'SIGKILL')
+  } catch {
+    // já saiu
+  }
 }

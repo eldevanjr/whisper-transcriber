@@ -5,6 +5,9 @@ export default defineConfig({
   plugins: [react()],
   test: {
     restoreMocks: true,
+    // A suíte cresceu com o MCP: 5 s (padrão) estoura em testes de renderer sob cobertura num
+    // runner carregado, causando flake. 20 s é folga sem esconder travamento de verdade.
+    testTimeout: 20_000,
     projects: [
       {
         extends: true,
