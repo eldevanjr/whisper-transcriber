@@ -36,6 +36,7 @@ import {
 } from './live/system-audio'
 import { createMediaHandler, MEDIA_SCHEME } from './media-protocol'
 import { isMcpMode, runMcp } from './mcp/entry'
+import { launcherTarget, writeLauncher } from './mcp/launcher'
 import { appPaths, modelDir } from './paths'
 import { TranscriptionQueue } from './queue/queue'
 import { applyCsp, isAllowedExternalUrl, isAllowedNavigation, isTrustedSender } from './security'
@@ -85,6 +86,21 @@ async function main(): Promise<void> {
       log.error(message)
     }
   }
+
+  // O lançador que as IAs chamam é regravado a cada abertura (spec §6), sem bloquear o app.
+  void writeLauncher(
+    paths,
+    launcherTarget({
+      platform: process.platform,
+      execPath: process.execPath,
+      env: process.env,
+      isPackaged: app.isPackaged,
+      appPath: app.getAppPath()
+    }),
+    process.platform
+  ).catch((error: unknown) => {
+    logger.error(`[mcp] não foi possível gravar o lançador: ${String(error)}`)
+  })
 
   const settings = await SettingsStore.open(paths)
   if (settings.recovered)
