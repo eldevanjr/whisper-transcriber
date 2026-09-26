@@ -14,7 +14,8 @@
     "remove": "Remover",
     "retry": "Tentar de novo",
     "search": "Buscar",
-    "dismiss": "Dispensar aviso"
+    "dismiss": "Dispensar aviso",
+    "viaClient": "via {{client}}"
   },
   "errors": {
     "INVALID_MESSAGE": "O motor recebeu um pedido inválido.",
@@ -53,7 +54,14 @@
     "LIVE_NOT_STARTED": "Nenhuma sessão ao vivo em andamento.",
     "LIVE_ACTIVE": "Já há uma transcrição ao vivo em andamento.",
     "QUEUE_BUSY": "Espere a fila terminar (ou cancele o arquivo atual) para começar o ao vivo.",
-    "MIC_DENIED": "O acesso ao microfone foi negado."
+    "MIC_DENIED": "O acesso ao microfone foi negado.",
+    "MCP_DISABLED": "O acesso de IAs está desligado no Whisper Transcriber (Configurações → IAs).",
+    "TRANSCRIBE_DISABLED": "Transcrever por IA está desligado nas configurações do Whisper Transcriber.",
+    "APP_START_TIMEOUT": "O Whisper Transcriber não iniciou a tempo.",
+    "SETUP_INCOMPLETE": "Conclua a configuração inicial do Whisper Transcriber e tente de novo.",
+    "CONFIG_INVALID": "O arquivo de configuração da IA tem um erro; use a configuração manual.",
+    "CONFIG_HAS_COMMENTS": "O arquivo da IA tem comentários; para não perdê-los, use a configuração manual.",
+    "CLIENT_CLI_FAILED": "O comando da IA falhou."
   },
   "notices": {
     "cudaFallback": "A GPU falhou; esta transcrição seguiu na CPU.",
@@ -140,6 +148,7 @@
     },
     "drop": "Solte para transcrever",
     "settings": "Configurações",
+    "connectAi": "Conectar IAs",
     "cancel": "Cancelar transcrição",
     "cancelTitle": "Cancelar a transcrição?",
     "cancelMessage": "O que já foi transcrito deste arquivo será descartado.",
@@ -195,6 +204,7 @@
       "general": "Geral",
       "transcription": "Transcrição",
       "live": "Ao vivo",
+      "ai": "IAs (MCP)",
       "storage": "Armazenamento",
       "help": "Ajuda",
       "about": "Sobre",
@@ -210,7 +220,11 @@
         "dark": "Escuro"
       },
       "updates": "Verificar novas versões",
-      "updatesHint": "Avisa quando sair uma versão nova."
+      "updatesHint": "Avisa quando sair uma versão nova.",
+      "closeToTray": "Ao fechar a janela, continuar na bandeja",
+      "closeToTrayHint": "O ícone na bandeja deixa gravar e abrir o app. No GNOME, ele precisa da extensão AppIndicator (já vem no Ubuntu).",
+      "openAtLogin": "Abrir ao entrar no computador",
+      "openAtLoginHint": "Abre escondido na bandeja, com o atalho pronto."
     },
     "models": {
       "title": "Modelo",
@@ -274,6 +288,74 @@
       "count": "{{count}} componentes",
       "backToList": "Voltar à lista",
       "openPage": "Abrir página do projeto"
+    },
+    "ai": {
+      "intro": "Deixe assistentes de IA do seu computador lerem suas transcrições e pedirem novas. Nada sai do seu computador.",
+      "access": {
+        "title": "Acesso de IAs",
+        "enabled": "Permitir que IAs leiam minhas transcrições",
+        "transcribe": "Permitir que IAs transcrevam arquivos",
+        "ready": "Pronto · {{count}} IAs conectadas",
+        "off": "Desligado",
+        "problem": "Com problema: {{reason}}",
+        "test": "Testar conexão",
+        "testing": "Testando…",
+        "testOk": "Funcionando ({{count}} ferramentas)",
+        "testError": "Falhou: {{message}}",
+        "notify": "Avisar quando uma IA pedir transcrição",
+        "notifyHint": "Notificação do sistema no pedido e quando a transcrição termina; o ícone da bandeja ganha um ponto azul até você abrir o app."
+      },
+      "clients": {
+        "title": "IAs neste computador",
+        "missing": "Não encontrado",
+        "found": "Encontrado",
+        "connected": "Conectado",
+        "used": "usado {{time}}",
+        "restart": "reinicie o {{name}} para usar",
+        "connect": "Conectar",
+        "connecting": "Conectando…",
+        "disconnect": "Desconectar",
+        "disconnecting": "Desconectando…",
+        "manual": "Config manual",
+        "copy": "Copiar",
+        "copied": "✓ Copiado",
+        "configInvalid": "O arquivo de configuração do {{name}} tem um erro; use a config manual.",
+        "configHasComments": "O arquivo do {{name}} tem comentários; para não perdê-los, use a config manual."
+      },
+      "confirm": {
+        "title": "Permitir acesso?",
+        "message": "Permitir que IAs leiam suas transcrições? Você pode desligar quando quiser.",
+        "confirm": "Permitir e conectar",
+        "cancel": "Cancelar"
+      },
+      "other": {
+        "title": "Outra IA",
+        "description": "Qualquer app compatível com MCP (stdio) funciona com este comando:",
+        "command": "Comando",
+        "json": "JSON genérico (mcpServers)",
+        "copyCommand": "Copiar comando",
+        "copyJson": "Copiar JSON"
+      },
+      "web": {
+        "title": "ChatGPT e claude.ai (web)",
+        "description": "Esses assistentes rodam na nuvem e só conseguem se conectar a servidores publicados na internet. Para manter suas transcrições no seu computador, eles não são suportados."
+      },
+      "activity": {
+        "title": "Atividade recente",
+        "empty": "Nenhuma IA usou ainda.",
+        "line": "{{client}} · {{tool}} · {{time}}",
+        "lineWithTitle": "{{client}} · {{tool}} “{{title}}” · {{time}}",
+        "tools": {
+          "list_transcriptions": "listou as transcrições",
+          "search_transcriptions": "buscou nas transcrições",
+          "get_transcription": "leu uma transcrição",
+          "get_audio": "pegou um áudio",
+          "export_transcription": "exportou uma transcrição",
+          "get_activity": "viu a atividade",
+          "get_status": "acompanhou uma transcrição",
+          "transcribe_file": "pediu uma transcrição"
+        }
+      }
     }
   },
   "help": {
@@ -318,8 +400,6 @@
     "defaultMic": "Padrão do sistema",
     "unnamedMic": "Microfone {{n}}",
     "level": "Nível: {{name}}",
-    "you": "Você",
-    "others": "Outros",
     "systemAudio": "Áudio do computador (Outros)",
     "systemAudioHint": "O que toca no computador, como as vozes da chamada.",
     "systemUnavailable": "Não disponível neste sistema.",
@@ -360,6 +440,49 @@
     "reconnect": "Reconectar",
     "permission": "Abrir as permissões do sistema",
     "retry": "Tentar de novo",
-    "defaultTitle": "Reunião {{date}}"
+    "defaultTitle": "Reunião {{date}}",
+    "shortcut": "Atalho para começar/parar",
+    "shortcutHint": "Funciona mesmo com a janela fechada.",
+    "shortcutRecord": "Gravar atalho: {{current}}",
+    "shortcutRecording": "Pressione a combinação…",
+    "shortcutDefault": "Restaurar padrão",
+    "shortcutOff": "Desligar",
+    "shortcutNone": "Desligado",
+    "shortcutTaken": "Essa combinação já é usada por outro programa. Escolha outra.",
+    "shortcutUnavailable": "O sistema não permitiu o atalho. A bandeja continua funcionando.",
+    "shortcutNeedsModifier": "Use Ctrl, Alt ou Super junto com uma letra, número ou F1–F24."
+  },
+  "background": {
+    "tooltip": "Whisper Transcriber",
+    "tooltipRecording": "Gravando — {{time}}",
+    "tooltipPaused": "Em pausa — {{time}}",
+    "statusRecording": "● Gravando",
+    "statusPaused": "● Em pausa",
+    "start": "Começar gravação",
+    "stop": "Parar gravação",
+    "pause": "Pausar",
+    "resume": "Retomar",
+    "open": "Abrir Whisper Transcriber",
+    "finishSetup": "Termine a configuração",
+    "quit": "Sair",
+    "withShortcut": "{{label}} ({{shortcut}})",
+    "started": "Gravando",
+    "tracksBoth": "Você + Outros",
+    "tracksMic": "Só Você",
+    "saved": "Reunião salva",
+    "savedBody": "{{title}} — {{minutes}} min",
+    "failed": "A gravação terminou com erro",
+    "startFailed": "Não deu para começar a gravar",
+    "setupFirst": "Termine a configuração do app para gravar.",
+    "deviceLost": "Microfone desconectado",
+    "deviceLostBody": "Gravação em pausa.",
+    "hiddenTitle": "Continua na bandeja",
+    "hiddenBody": "Use {{shortcut}} para gravar. Para sair, use o ícone na bandeja.",
+    "hiddenBodyNoShortcut": "Para gravar ou sair, use o ícone na bandeja.",
+    "recording": "Gravando",
+    "aiRequested": "{{client}} pediu uma transcrição",
+    "aiDone": "Transcrição pronta ({{client}})",
+    "aiFailed": "A transcrição falhou ({{client}})",
+    "aiFailedBody": "{{title}}: {{reason}}"
   }
 }

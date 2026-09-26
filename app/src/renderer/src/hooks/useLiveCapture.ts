@@ -1,11 +1,12 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useEffectEvent, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { ErrorInfo } from '../../../shared/errors'
 import type { HistoryMeta } from '../../../shared/history'
+import type { BackgroundCommand } from '../../../shared/ipc'
 import type { Track } from '../../../shared/settings'
 import { errorInfoOf } from '../errors'
 import type { Capture, CaptureEvent } from '../live/capture'
-import { useApi, useAppStore, useLiveMedia } from '../providers'
+import { useApi, useAppStore, useAppStoreApi, useLiveMedia } from '../providers'
 import { useGuard } from './useGuard'
 import { useLiveSettings } from './useSaveLive'
 import { useLiveSupport, type SystemAudioSupport } from './useLiveSupport'
@@ -51,6 +52,10 @@ export function useLiveCapture(): LiveController {
   const support = useLiveSupport()
   const select = useAppStore((s) => s.select)
   const closeLive = useAppStore((s) => s.closeLive)
+  const view = useAppStore((s) => s.view)
+  const sessionState = useAppStore((s) => s.liveSession.state)
+  const openLive = useAppStore((s) => s.openLive)
+  const store = useAppStoreApi()
   const title = useSessionTitle()
   const [tracks, setTracks] = useState<Track[]>([])
   const [levels, setLevels] = useState(SILENT)
@@ -59,6 +64,10 @@ export function useLiveCapture(): LiveController {
   const [attempt, setAttempt] = useState(0)
   const sending = useRef(false)
   const inSession = useRef(false)
+  const deviceLostRef = useRef(false) // espelho do estado: os comandos leem na hora, sem render
+  // O microfone abre só com a tela do ao vivo ou durante a sessão (na bandeja fica fechado).
+  const needed = view === 'live' || sessionState !== 'idle'
+  const armed = useRef(false) // a bandeja pediu para começar assim que a captura abrir
 
   const onCaptureEvent = useCallback(
     (event: CaptureEvent): void => {
@@ -68,17 +77,41 @@ export function useLiveCapture(): LiveController {
         return
       }
       setDeviceLost(true)
+      deviceLostRef.current = true
       setLevels((previous) => ({ ...previous, [event.track]: 0 }))
       if (sending.current) {
         sending.current = false
         void guard(() => api.live.pause())
+        void api.background.report({ kind: 'deviceLost' })
       }
     },
     [api, guard]
   )
 
+  const startFromTray = useEffectEvent(async (opened: Track[]) => {
+    try {
+      await api.live.start({ tracks: opened, test: false, title: title() })
+      inSession.current = true
+      sending.current = true
+    } catch (failure) {
+      void api.background.report({ kind: 'startFailed', error: errorInfoOf(failure) })
+    }
+  })
+
+  const onOpened = useEffectEvent((opened: Track[]) => {
+    if (!armed.current) return
+    armed.current = false
+    void startFromTray(opened)
+  })
+
+  const onOpenFailed = useEffectEvent((info: ErrorInfo) => {
+    if (!armed.current) return
+    armed.current = false
+    void api.background.report({ kind: 'startFailed', error: info })
+  })
+
   useEffect(() => {
-    if (support === null) return
+    if (support === null || !needed) return
     let active = true
     let opened: Capture | null = null
     const options = { micDeviceId: live.micDeviceId, systemAudio: live.systemAudio, support }
@@ -89,11 +122,16 @@ export function useLiveCapture(): LiveController {
         started.onEvent(onCaptureEvent)
         setError(null)
         setDeviceLost(false)
+        deviceLostRef.current = false
         setLevels(SILENT)
         setTracks(started.tracks)
+        onOpened(started.tracks)
       },
       (failure: unknown) => {
-        if (active) setError(errorInfoOf(failure))
+        if (!active) return
+        const info = errorInfoOf(failure)
+        setError(info)
+        onOpenFailed(info)
       }
     )
     return () => {
@@ -101,7 +139,7 @@ export function useLiveCapture(): LiveController {
       setTracks([])
       void opened?.stop()
     }
-  }, [media, support, live.micDeviceId, live.systemAudio, attempt, onCaptureEvent])
+  }, [media, support, live.micDeviceId, live.systemAudio, attempt, onCaptureEvent, needed])
 
   // Saiu da tela no meio da sessão: encerra (o main finaliza a gravação).
   useEffect(
@@ -147,6 +185,34 @@ export function useLiveCapture(): LiveController {
   const reopen = useCallback(() => {
     setAttempt((n) => n + 1)
   }, [])
+
+  const onToggle = useEffectEvent(() => {
+    const state = store.getState().liveSession.state
+    if (state === 'recording' || state === 'paused') {
+      void stop()
+      return
+    }
+    if (state !== 'idle') return // começando/parando: nada
+    armed.current = true
+    setError(null)
+    setAttempt((n) => n + 1) // captura nova: o 1º "aberta" dela começa a sessão
+    openLive()
+  })
+
+  const onCommand = useEffectEvent(({ action }: BackgroundCommand) => {
+    const state = store.getState().liveSession.state
+    if (action === 'pause') {
+      if (state === 'recording') void pause()
+      return
+    }
+    if (action === 'resume') {
+      if (state === 'paused' && !deviceLostRef.current) void resume()
+      return
+    }
+    onToggle()
+  })
+
+  useEffect(() => api.background.onCommand(onCommand), [api])
 
   return { support, tracks, levels, error, deviceLost, reopen, start, stop, pause, resume }
 }

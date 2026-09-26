@@ -29,7 +29,14 @@ export const APP_ERROR_CODES = [
   'INVALID_REQUEST',
   'NOT_FOUND',
   'QUEUE_BUSY',
-  'MIC_DENIED'
+  'MIC_DENIED',
+  'MCP_DISABLED',
+  'TRANSCRIBE_DISABLED',
+  'APP_START_TIMEOUT',
+  'SETUP_INCOMPLETE',
+  'CONFIG_INVALID',
+  'CONFIG_HAS_COMMENTS',
+  'CLIENT_CLI_FAILED'
 ] as const
 
 export type ErrorCode = (typeof WORKER_ERROR_CODES)[number] | (typeof APP_ERROR_CODES)[number]

@@ -2,6 +2,7 @@ import { Banners } from './components/Banners'
 import { BootSplash } from './components/BootSplash'
 import { Toasts } from './components/Toasts'
 import { useBootstrap } from './hooks/useBootstrap'
+import { useBackgroundNavigation } from './hooks/useBackgroundNavigation'
 import { useAppStore } from './providers'
 import { LiveScreen } from './screens/live/LiveScreen'
 import { MainScreen } from './screens/main/MainScreen'
@@ -17,6 +18,7 @@ function Screen() {
 }
 
 export function App() {
+  useBackgroundNavigation()
   const ready = useBootstrap()
   if (!ready) return <BootSplash />
   return (

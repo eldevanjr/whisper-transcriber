@@ -1,35 +1,18 @@
 import { createReadStream } from 'node:fs'
 import { stat } from 'node:fs/promises'
-import { extname, join } from 'node:path'
+import { join } from 'node:path'
 import { Readable } from 'node:stream'
 import { AppError } from '../shared/errors'
+import { contentTypeFor } from '../shared/media'
 import { pathExists } from './fs-utils'
 import type { HistoryStore } from './history/store'
+
+export { contentTypeFor }
 
 export const MEDIA_SCHEME = 'app-media'
 
 // O áudio só passa a existir no meio do job: um 404 em cache deixaria o player quebrado.
 const NO_STORE = 'no-store'
-
-const CONTENT_TYPES: Record<string, string> = {
-  '.mp4': 'video/mp4',
-  '.webm': 'video/webm',
-  '.mkv': 'video/x-matroska',
-  '.mov': 'video/quicktime',
-  '.avi': 'video/x-msvideo',
-  '.m4a': 'audio/mp4',
-  '.mp3': 'audio/mpeg',
-  '.wav': 'audio/wav',
-  '.ogg': 'audio/ogg',
-  '.opus': 'audio/ogg',
-  '.flac': 'audio/flac',
-  '.aac': 'audio/aac',
-  '.wma': 'audio/x-ms-wma'
-}
-
-export function contentTypeFor(path: string): string {
-  return CONTENT_TYPES[extname(path).toLowerCase()] ?? 'application/octet-stream'
-}
 
 interface ByteRange {
   start: number

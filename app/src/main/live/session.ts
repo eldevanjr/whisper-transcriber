@@ -71,6 +71,7 @@ interface Session {
 export class LiveService {
   state: LiveState = 'idle'
   private session: Session | null = null
+  private stopPromise: Promise<HistoryMeta | null> | null = null
   private readonly openWav: (path: string) => Promise<TrackWriter>
 
   constructor(private readonly deps: LiveDeps) {
@@ -230,9 +231,18 @@ export class LiveService {
     this.setState('recording', session.test, session.itemId)
   }
 
-  async stop(): Promise<HistoryMeta | null> {
+  stop(): Promise<HistoryMeta | null> {
     const session = this.session
-    if (!session || this.state === 'stopping' || this.state === 'idle') return null
+    if (!session || this.state === 'idle') return Promise.resolve(null)
+    // Quem chega durante o encerramento espera a mesma finalização (ex.: "Parar" e depois "Sair").
+    if (this.stopPromise) return this.stopPromise
+    this.stopPromise = this.runStop(session).finally(() => {
+      this.stopPromise = null
+    })
+    return this.stopPromise
+  }
+
+  private async runStop(session: Session): Promise<HistoryMeta | null> {
     this.setState('stopping', session.test, session.itemId)
     try {
       // Cada etapa falha sozinha: o que foi gravado sempre é fechado e finalizado.

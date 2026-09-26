@@ -258,6 +258,38 @@ describe('HistoryStore — ao vivo', () => {
     expect((await store.readActive(meta)).map((e) => e.texto)).toEqual(['ao vivo'])
   })
 
+  it('readVersion: live é a ao vivo/parcial; redo sem refeita → NOT_FOUND', async () => {
+    const { store } = await makeStore()
+    const meta = await store.createLive({
+      title: 'R',
+      tracks: ['voce'],
+      model: 'small',
+      language: null
+    })
+    await store.appendSegment(meta.id, { start: 0, end: 1, text: 'ao vivo', speaker: 'voce' })
+    expect(await store.readVersion(meta, 'live')).toEqual([
+      { inicio: 0, fim: 1, texto: 'ao vivo', falante: 'voce' }
+    ])
+    await expect(store.readVersion(meta, 'redo')).rejects.toSatisfy(isCode('NOT_FOUND'))
+  })
+
+  it('readVersion redo devolve a refeita depois de finalizada', async () => {
+    const { store } = await makeStore()
+    const meta = await store.createLive({
+      title: 'R',
+      tracks: ['voce'],
+      model: 'small',
+      language: null
+    })
+    await store.appendSegment(meta.id, { start: 0, end: 1, text: 'ao vivo', speaker: 'voce' })
+    await store.finalizeLive(meta.id)
+    await store.appendSegment(meta.id, { start: 0, end: 1, text: 'refeita', speaker: 'voce' })
+    await store.finalize(meta.id)
+    expect(await store.readVersion(meta, 'redo')).toEqual([
+      { inicio: 0, fim: 1, texto: 'refeita', falante: 'voce' }
+    ])
+  })
+
   it('arquivo comum: readActive é a transcrição de sempre e não há refeita', async () => {
     const { store } = await makeStore()
     const meta = await store.create({

@@ -14,6 +14,14 @@ describe('TopBar', () => {
     await expectAccessible(container)
   })
 
+  it('botão de IAs abre a seção IAs (MCP) das configurações', async () => {
+    const { user, store, container } = await renderWithApp(<TopBar />)
+    await user.click(screen.getByRole('button', { name: 'Conectar IAs' }))
+    expect(store.getState().view).toBe('settings')
+    expect(store.getState().settingsSection).toBe('ai')
+    await expectAccessible(container)
+  })
+
   it('com job: fase, barra, tempos, restante e velocidade', async () => {
     const job = makeMeta({ fileName: 'aula.mp4', status: 'processing' })
     const api = new FakeApi()

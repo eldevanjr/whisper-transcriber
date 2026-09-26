@@ -75,6 +75,16 @@ describe('histórico do ao vivo', () => {
     expect(HistoryMetaSchema.safeParse({ ...base, tracks: ['alguem'] }).success).toBe(false)
   })
 
+  it('meta antiga sem requestedBy continua válida', () => {
+    expect(HistoryMetaSchema.parse(base).requestedBy).toBeUndefined()
+  })
+
+  it('meta guarda o cliente que pediu a transcrição', () => {
+    expect(HistoryMetaSchema.parse({ ...base, requestedBy: 'claude-code' }).requestedBy).toBe(
+      'claude-code'
+    )
+  })
+
   it('trecho pode ter falante', () => {
     expect(
       TranscriptEntrySchema.parse({ inicio: 0, fim: 1, texto: 'oi', falante: 'voce' })

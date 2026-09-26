@@ -9,19 +9,24 @@ e [whisper.cpp](https://github.com/ggml-org/whisper.cpp) (GPU por Vulkan ou Meta
 - Resultado em **Texto** (parágrafos), **Com tempos** e **JSON**, com Copiar e Baixar.
 - **Ao vivo** para reuniões e chamadas: transcreve o microfone ("Você") e o áudio do computador
   ("Outros") frase a frase, grava tudo e deixa refazer com o áudio completo depois.
+- **Bandeja e atalho:** fechar a janela deixa o app na bandeja; **Ctrl+Alt+R** (⌘⌥R no macOS)
+  começa e para a gravação ao vivo de qualquer lugar, com bolinha vermelha no ícone e
+  notificações do sistema. Abre com o computador (dá para desligar em Configurações → Geral).
 - Histórico com o áudio salvo; GPU NVIDIA (CUDA), AMD/Intel (Vulkan) ou Apple Silicon (Metal).
+- **IAs (MCP):** Claude Code, Codex, OpenCode e outras leem, buscam e transcrevem por você, sem
+  nada sair do computador.
 - Interface em português, inglês e espanhol; temas claro, escuro ou do sistema.
 
 ## Veja funcionando
 
 ![Transcrição ao vivo: fila com vídeos e áudios, trechos aparecendo como num chat e o vídeo acompanhando](docs/screenshots/01-transcrevendo.png)
 
-| | |
-|---|---|
-| ![Aba Trechos: cada trecho com o tempo; clicar pula o vídeo](docs/screenshots/02-trechos.png) | ![Aba Texto: a transcrição em parágrafos, pronta para copiar ou baixar](docs/screenshots/03-texto.png) |
-| **Trechos** — cada fala com o tempo; clique para pular o vídeo | **Texto** — parágrafos prontos para copiar ou baixar |
-| ![Tema escuro](docs/screenshots/05-tema-escuro.png) | ![Escolha do modelo na primeira abertura, com a GPU detectada](docs/screenshots/06-escolha-do-modelo.png) |
-| **Tema escuro** (ou claro, ou o do sistema) | **Primeira abertura** — escolha do modelo e uso da GPU |
+|                                                                                               |                                                                                                           |
+| --------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| ![Aba Trechos: cada trecho com o tempo; clicar pula o vídeo](docs/screenshots/02-trechos.png) | ![Aba Texto: a transcrição em parágrafos, pronta para copiar ou baixar](docs/screenshots/03-texto.png)    |
+| **Trechos** — cada fala com o tempo; clique para pular o vídeo                                | **Texto** — parágrafos prontos para copiar ou baixar                                                      |
+| ![Tema escuro](docs/screenshots/05-tema-escuro.png)                                           | ![Escolha do modelo na primeira abertura, com a GPU detectada](docs/screenshots/06-escolha-do-modelo.png) |
+| **Tema escuro** (ou claro, ou o do sistema)                                                   | **Primeira abertura** — escolha do modelo e uso da GPU                                                    |
 
 ![Configurações de transcrição: modelos, idioma do áudio e processamento na CPU ou GPU](docs/screenshots/04-configuracoes.png)
 
@@ -31,6 +36,10 @@ e [whisper.cpp](https://github.com/ggml-org/whisper.cpp) (GPU por Vulkan ou Meta
 
 - **Preparar e testar:** escolha o microfone, veja os medidores de nível e clique em **Testar**
   para ver o texto aparecer sem salvar nada.
+- **Sem abrir a janela:** o ícone na bandeja e o atalho (Configurações → Ao vivo, dá para trocar)
+  começam e param a sessão com o microfone e o áudio do computador salvos. No GNOME, o ícone precisa
+  da extensão AppIndicator (já vem no Ubuntu); no Wayland o sistema pede para liberar o atalho na
+  primeira vez.
 - **Frase a frase:** o texto sai quando há uma pausa (1,0 s por padrão, ajustável de 0,5 a 3 s
   em Configurações → Ao vivo) ou a cada 25 s de fala contínua, sem picotar palavras.
 - **Duas faixas:** o microfone ("Você") e o áudio do computador ("Outros") são transcritos
@@ -39,6 +48,65 @@ e [whisper.cpp](https://github.com/ggml-org/whisper.cpp) (GPU por Vulkan ou Meta
 - **Gravado:** ao encerrar, a sessão vira um item do histórico com o player (Tudo, Você ou
   Outros). **Refazer com o áudio completo** transcreve as faixas inteiras, que costuma ficar mais
   preciso, e a versão ao vivo continua guardada (**Versão: Refeita · Ao vivo**).
+
+### Usar com IAs (MCP)
+
+O app vira um servidor [MCP](https://modelcontextprotocol.io) local: assistentes de IA que rodam
+no seu computador leem, buscam e baixam suas transcrições, acompanham a fila, o progresso e uma
+reunião ao vivo, e pedem novas transcrições — tudo por **stdio**, sem abrir nenhuma porta de rede.
+
+![Seção IAs (MCP): acesso das IAs, a lista de IAs neste computador e a config manual](docs/screenshots/08-ias-mcp.png)
+
+**O que a IA pode fazer**
+
+- Listar e buscar transcrições, ler o texto (parágrafos, com tempos ou JSON) e baixar o áudio.
+- Ver a fila, a etapa, o % e o tempo restante, e acompanhar uma reunião ao vivo enquanto acontece.
+- Pedir para transcrever um arquivo; com o app fechado, ele **abre sozinho** e a fila mostra
+  **"via <IA>"**.
+
+Ela **não** apaga, renomeia, edita nem cancela nada, e não inicia sessão ao vivo.
+
+**Como conectar**
+
+1. Abra **Configurações → IAs (MCP)** (ou o botão **Conectar IAs** na barra de cima).
+2. Ligue **Permitir que IAs leiam minhas transcrições** (e, se quiser, **Permitir que IAs
+   transcrevam arquivos**, ligada por padrão).
+3. No cartão da IA (Claude Code, Claude Desktop, Codex, OpenCode, Cursor, VS Code, Gemini CLI,
+   Windsurf), clique em **Conectar**. Quem pede reinício mostra o aviso; o resto já vale nas
+   próximas sessões.
+
+O botão **Testar conexão** roda o próprio lançador como um cliente MCP e confirma as 8 ferramentas.
+
+**Config manual**
+
+Qualquer app compatível com MCP (stdio) funciona com o comando do lançador, mostrado no bloco
+**Outra IA** e no **Config manual** de cada cartão. No Claude Desktop, por exemplo, a entrada
+`mcpServers` fica assim (o caminho é o que o app mostra):
+
+```json
+{
+  "mcpServers": {
+    "whisper-transcriber": {
+      "command": ".../Whisper Transcriber/mcp/whisper-transcriber-mcp",
+      "args": []
+    }
+  }
+}
+```
+
+O lançador é regravado a cada abertura do app; depois de atualizar, basta abrir o app uma vez.
+
+**Por que o ChatGPT e o claude.ai (web) não**
+
+Esses assistentes rodam na nuvem e só alcançam servidores MCP com endereço público na internet.
+Conectá-los exigiria expor suas transcrições por um túnel — por isso, para manter tudo no seu
+computador, eles não são suportados. Use as versões de desktop/CLI, que rodam na sua máquina.
+
+**Privacidade**
+
+Nenhuma porta TCP é aberta: a conversa com a IA é stdio e a ponte com o app é um socket local
+(Unix) ou pipe nomeado (Windows), com token novo a cada abertura. Os registros de uso
+(`activity.jsonl`) não guardam o conteúdo das transcrições.
 
 <sub>Mídias das capturas, todas em domínio público: discurso de John F. Kennedy na Rice University
 (1962) e vídeo da NASA sobre a tripulação da Artemis II, via Wikimedia Commons; contos
@@ -50,12 +118,12 @@ da captura do ao vivo é fictícia.</sub>
 Baixe o instalador do seu sistema na [última versão](https://github.com/eldevanjr/whisper-transcriber/releases/latest)
 (confira pelo `SHA256SUMS.txt`):
 
-| Sistema | Arquivo | Atualização |
-|---|---|---|
-| Windows 10/11 (x64) | `…-windows-x64.exe` (instala só para o seu usuário) | automática |
-| Linux (x64) | `…-linux-x64.AppImage` | automática |
-| Linux Debian/Ubuntu (x64) | `…-linux-x64.deb` | aviso com link para a nova versão |
-| macOS 14+ (Apple Silicon) | `…-macos-arm64.dmg` | aviso com link para a nova versão |
+| Sistema                   | Arquivo                                             | Atualização                       |
+| ------------------------- | --------------------------------------------------- | --------------------------------- |
+| Windows 10/11 (x64)       | `…-windows-x64.exe` (instala só para o seu usuário) | automática                        |
+| Linux (x64)               | `…-linux-x64.AppImage`                              | automática                        |
+| Linux Debian/Ubuntu (x64) | `…-linux-x64.deb`                                   | aviso com link para a nova versão |
+| macOS 14+ (Apple Silicon) | `…-macos-arm64.dmg`                                 | aviso com link para a nova versão |
 
 **macOS:** o app ainda não é assinado pela Apple. Na primeira vez, abra o app, feche o aviso e vá
 em Ajustes do Sistema → Privacidade e Segurança → **Abrir mesmo assim**.
@@ -91,13 +159,13 @@ cd app && pnpm install          # app
 pnpm dev                        # abre o app com recarga automática
 ```
 
-| Comando (em `app/`) | O que faz |
-|---|---|
-| `pnpm test` | testes unitários (main, preload, shared, renderer) com 100% de cobertura |
-| `pnpm test:integration` | contrato real app ↔ motor (modelo `tiny`) |
-| `pnpm e2e` | build + Playwright no app de verdade, com motor falso |
-| `pnpm lint` / `pnpm typecheck` / `pnpm cpd` | lint estrito, tipos e duplicação |
-| `pnpm gen:licenses` | atualiza `resources/third-party-licenses.json` (tela Licenças) |
+| Comando (em `app/`)                         | O que faz                                                                |
+| ------------------------------------------- | ------------------------------------------------------------------------ |
+| `pnpm test`                                 | testes unitários (main, preload, shared, renderer) com 100% de cobertura |
+| `pnpm test:integration`                     | contrato real app ↔ motor (modelo `tiny`)                                |
+| `pnpm e2e`                                  | build + Playwright no app de verdade, com motor falso                    |
+| `pnpm lint` / `pnpm typecheck` / `pnpm cpd` | lint estrito, tipos e duplicação                                         |
+| `pnpm gen:licenses`                         | atualiza `resources/third-party-licenses.json` (tela Licenças)           |
 
 No motor: `uv run pytest` (100% de cobertura), `uv run ruff check`, `uv run mypy`.
 

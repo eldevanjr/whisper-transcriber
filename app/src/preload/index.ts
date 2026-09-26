@@ -88,6 +88,18 @@ export const api: TranscriberApi = {
       ipcRenderer.send(SEND.liveAudio, { track, seq, pcm })
     },
     onEvent: (callback) => subscribe(EVENTS.live, callback)
+  },
+  mcpStatus: () => invoke(IPC.mcpStatus),
+  mcpConnect: (id) => invoke(IPC.mcpConnect, id),
+  mcpDisconnect: (id) => invoke(IPC.mcpDisconnect, id),
+  mcpTest: () => invoke(IPC.mcpTest),
+  mcpActivity: () => invoke(IPC.mcpActivity),
+  background: {
+    report: (report) => invoke(IPC.backgroundReport, report),
+    shortcutStatus: () => invoke(IPC.backgroundShortcutStatus),
+    suspendShortcut: (on) => invoke(IPC.backgroundSuspendShortcut, on),
+    onCommand: (callback) => subscribe(EVENTS.backgroundCommand, callback),
+    onNavigate: (callback) => subscribe(EVENTS.backgroundNavigate, callback)
   }
 }
 

@@ -3,6 +3,7 @@ import { UI_LANGUAGES, type Settings } from '../../../../shared/settings'
 import { RadioGroup, SelectField } from '../../components/Fields'
 import { Toggle } from '../../components/Toggle'
 import { useSaveSettings } from '../../hooks/useSaveSettings'
+import { useSaveTray, useTraySettings } from '../../hooks/useSaveTray'
 import { LANGUAGE_NAMES } from '../onboarding/Welcome'
 
 type LanguageChoice = 'system' | (typeof UI_LANGUAGES)[number]
@@ -10,6 +11,8 @@ type LanguageChoice = 'system' | (typeof UI_LANGUAGES)[number]
 export function GeneralSection({ settings }: { settings: Settings }) {
   const { t } = useTranslation()
   const save = useSaveSettings()
+  const tray = useTraySettings()
+  const saveTray = useSaveTray()
   const themes = ['system', 'light', 'dark'] as const
   return (
     <div className="flex flex-col gap-6">
@@ -34,6 +37,18 @@ export function GeneralSection({ settings }: { settings: Settings }) {
         description={t('settings.general.updatesHint')}
         checked={settings.checkUpdates}
         onChange={(checkUpdates) => void save({ checkUpdates })}
+      />
+      <Toggle
+        label={t('settings.general.closeToTray')}
+        description={t('settings.general.closeToTrayHint')}
+        checked={tray.closeToTray}
+        onChange={(closeToTray) => void saveTray({ closeToTray })}
+      />
+      <Toggle
+        label={t('settings.general.openAtLogin')}
+        description={t('settings.general.openAtLoginHint')}
+        checked={tray.openAtLogin}
+        onChange={(openAtLogin) => void saveTray({ openAtLogin })}
       />
     </div>
   )

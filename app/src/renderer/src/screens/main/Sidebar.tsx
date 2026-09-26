@@ -17,6 +17,7 @@ import {
 import { useId, useMemo, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { HistoryMeta, JobStatus } from '../../../../shared/history'
+import { clientDisplayName } from '../../../../shared/mcp'
 import { Button, IconButton } from '../../components/Button'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { useQueueActions } from '../../hooks/useQueueActions'
@@ -49,11 +50,13 @@ function Row(props: {
   label: string
   sublabel: string
   icon: LucideIcon
+  requestedBy?: string
   spinning?: boolean
   selected?: boolean
   onSelect?: () => void
   actions?: ReactNode
 }) {
+  const { t } = useTranslation()
   const Icon = props.icon
   const content = (
     <>
@@ -63,7 +66,14 @@ function Row(props: {
         className={`shrink-0 ${props.spinning ? 'animate-spin text-accent' : 'text-muted'}`}
       />
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-sm">{props.label}</span>
+        <span className="block truncate text-sm">
+          {props.label}
+          {props.requestedBy !== undefined && (
+            <span className="ml-2 text-xs text-muted">
+              {t('common.viaClient', { client: clientDisplayName(props.requestedBy) })}
+            </span>
+          )}
+        </span>
         <span className="block text-xs text-muted">{props.sublabel}</span>
       </span>
     </>
@@ -158,6 +168,7 @@ export function Sidebar() {
               label={meta.fileName}
               sublabel={t(`main.status.${meta.status}`)}
               icon={STATUS_ICON[meta.status]}
+              requestedBy={meta.requestedBy}
               spinning={meta.status === 'processing'}
               selected={selectedId === meta.id}
               onSelect={() => {
@@ -186,6 +197,7 @@ export function Sidebar() {
             label={meta.fileName}
             sublabel={t(`main.status.${meta.status}`)}
             icon={STATUS_ICON[meta.status]}
+            requestedBy={meta.requestedBy}
             selected={selectedId === meta.id}
             onSelect={() => {
               select(meta.id)

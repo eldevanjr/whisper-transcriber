@@ -10,11 +10,23 @@ import type {
 import type { HistoryMeta } from '../../src/shared/history'
 import type {
   AppInfo,
+  BackgroundCommand,
   HistoryDetail,
   LiveCapabilities,
+  McpStatus,
+  McpTestResult,
   MonitorVolume,
+  NavigateTarget,
+  ShortcutStatus,
   TranscriberApi
 } from '../../src/shared/ipc'
+import {
+  MCP_CLIENT_NAMES,
+  type ClientState,
+  type ClientStatus,
+  type McpActivityLine,
+  type McpClientId
+} from '../../src/shared/mcp'
 import type { ModelId } from '../../src/shared/models'
 import { DEFAULT_SETTINGS, type Settings } from '../../src/shared/settings'
 
@@ -77,6 +89,8 @@ export class FakeApi implements TranscriberApi {
   private readonly queueListeners = new Set<Listener<QueueEvent>>()
   private readonly downloadListeners = new Set<Listener<DownloadEvent>>()
   private readonly settingsListeners = new Set<Listener<Settings>>()
+  private readonly commandListeners = new Set<Listener<BackgroundCommand>>()
+  private readonly navigateListeners = new Set<Listener<NavigateTarget>>()
 
   constructor(settings: Partial<Settings> = {}) {
     this.settingsValue = { ...DEFAULT_SETTINGS, model: 'medium', uiLanguage: 'pt-BR', ...settings }
@@ -93,6 +107,14 @@ export class FakeApi implements TranscriberApi {
   emitSettings(patch: Partial<Settings>): void {
     this.settingsValue = { ...this.settingsValue, ...patch }
     for (const listener of this.settingsListeners) listener(this.settingsValue)
+  }
+
+  emitCommand(command: BackgroundCommand): void {
+    for (const listener of this.commandListeners) listener(command)
+  }
+
+  emitNavigate(target: NavigateTarget): void {
+    for (const listener of this.navigateListeners) listener(target)
   }
 
   listenerCount(): number {
@@ -225,6 +247,47 @@ export class FakeApi implements TranscriberApi {
   }
 
   app = { info: vi.fn(() => Promise.resolve(APP_INFO)) }
+
+  background = {
+    report: vi.fn(() => Promise.resolve(null)),
+    shortcutStatus: vi.fn((): Promise<ShortcutStatus> => Promise.resolve('ok')),
+    suspendShortcut: vi.fn(() => Promise.resolve(null)),
+    onCommand: (callback: Listener<BackgroundCommand>) =>
+      subscribe(this.commandListeners, callback),
+    onNavigate: (callback: Listener<NavigateTarget>) => subscribe(this.navigateListeners, callback)
+  }
+  mcpStatus = vi.fn((): Promise<McpStatus> =>
+    Promise.resolve({
+      launcherOk: true,
+      launcherError: null,
+      launcherPath: '/home/u/.config/Whisper Transcriber/mcp/whisper-transcriber-mcp',
+      bridgeOk: true,
+      clients: []
+    })
+  )
+
+  mcpConnect = vi.fn((id: McpClientId): Promise<ClientStatus> =>
+    Promise.resolve(makeClientStatus(id, 'connected'))
+  )
+
+  mcpDisconnect = vi.fn((id: McpClientId): Promise<ClientStatus> =>
+    Promise.resolve(makeClientStatus(id, 'found'))
+  )
+
+  mcpTest = vi.fn((): Promise<McpTestResult> => Promise.resolve({ ok: true, tools: 8 }))
+
+  mcpActivity = vi.fn((): Promise<McpActivityLine[]> => Promise.resolve([]))
+}
+
+export function makeClientStatus(id: McpClientId, state: ClientState): ClientStatus {
+  return {
+    id,
+    name: MCP_CLIENT_NAMES[id],
+    state,
+    lastUsedAt: null,
+    restartNeeded: false,
+    manual: { kind: 'json', text: `{ "${id}": "config manual" }` }
+  }
 }
 
 function subscribe<T>(listeners: Set<Listener<T>>, callback: Listener<T>): () => void {

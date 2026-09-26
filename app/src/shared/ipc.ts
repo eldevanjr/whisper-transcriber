@@ -11,6 +11,7 @@ import type {
   UpdateInfo
 } from './events'
 import type { HistoryList, HistoryMeta, StorageStats, TranscriptEntry } from './history'
+import type { ClientStatus, McpActivityLine, McpClientId } from './mcp'
 import type { ModelFormat, ModelId } from './models'
 import type { Settings, SettingsPatch, Track } from './settings'
 
@@ -53,7 +54,15 @@ export const IPC = {
   liveResume: 'live:resume',
   liveCapabilities: 'live:capabilities',
   liveMonitorVolume: 'live:monitor-volume',
-  liveSetMonitorVolume: 'live:set-monitor-volume'
+  liveSetMonitorVolume: 'live:set-monitor-volume',
+  mcpStatus: 'mcp:status',
+  mcpConnect: 'mcp:connect',
+  mcpDisconnect: 'mcp:disconnect',
+  mcpTest: 'mcp:test',
+  mcpActivity: 'mcp:activity',
+  backgroundReport: 'background:report',
+  backgroundShortcutStatus: 'background:shortcut-status',
+  backgroundSuspendShortcut: 'background:suspend-shortcut'
 } as const
 
 export const EVENTS = {
@@ -61,7 +70,9 @@ export const EVENTS = {
   download: 'event:download',
   settings: 'event:settings',
   update: 'event:update',
-  live: 'event:live'
+  live: 'event:live',
+  backgroundCommand: 'event:background-command',
+  backgroundNavigate: 'event:background-navigate'
 } as const
 
 /** Canais sem resposta (renderer → main): os blocos de áudio do ao vivo, 10 por segundo. */
@@ -82,11 +93,25 @@ export interface MonitorVolume {
   muted: boolean
 }
 
+/** ok = registrado; taken = outro programa usa; unavailable = o sistema recusou (Wayland). */
+export type ShortcutStatus = 'ok' | 'off' | 'taken' | 'unavailable'
+
 export interface LiveStartInput {
   tracks: Track[]
   test: boolean
   title: string
 }
+
+/** Onde a janela abre ao clicar numa notificação. */
+export type NavigateTarget = { kind: 'item'; id: string } | { kind: 'live' } | { kind: 'window' }
+
+/** Do main para o renderer: a bandeja ou o atalho pediram começar/parar, pausar ou retomar. */
+export interface BackgroundCommand {
+  action: 'toggle' | 'pause' | 'resume'
+}
+
+/** Do renderer para o main: o que só ele sabe e vira notificação. */
+export type BackgroundReport = { kind: 'startFailed'; error: ErrorInfo } | { kind: 'deviceLost' }
 
 export interface HistoryDetail {
   meta: HistoryMeta
@@ -121,6 +146,22 @@ export interface AppInfo {
   version: string
   platform: string
   settingsRecovered: boolean
+}
+
+/** Retrato da seção de IAs (spec §10.2). */
+export interface McpStatus {
+  launcherOk: boolean
+  /** Motivo quando o lançador não foi gravado ("Com problema: <motivo>"); null quando OK. */
+  launcherError: string | null
+  launcherPath: string
+  bridgeOk: boolean
+  clients: ClientStatus[]
+}
+
+/** Resultado do "Testar conexão" (spec §10.2). */
+export interface McpTestResult {
+  ok: true
+  tools: number
 }
 
 export interface RetryInput {
@@ -199,5 +240,20 @@ export interface TranscriberApi {
     /** Bloco de 100 ms (4800 amostras a 48 kHz) de uma faixa; sem resposta. */
     sendAudio(track: Track, seq: number, pcm: Int16Array): void
     onEvent(callback: (event: LiveEvent) => void): Unsubscribe
+  }
+  /** Seção "IAs (MCP)" (spec §10.2). */
+  mcpStatus(): Promise<McpStatus>
+  mcpConnect(id: McpClientId): Promise<ClientStatus>
+  mcpDisconnect(id: McpClientId): Promise<ClientStatus>
+  mcpTest(): Promise<McpTestResult>
+  mcpActivity(): Promise<McpActivityLine[]>
+  background: {
+    /** Falha ao começar pela bandeja ou microfone perdido: o main notifica. */
+    report(report: BackgroundReport): Promise<null>
+    shortcutStatus(): Promise<ShortcutStatus>
+    /** Enquanto a tela grava um atalho novo, o atual não dispara. */
+    suspendShortcut(on: boolean): Promise<null>
+    onCommand(callback: (command: BackgroundCommand) => void): Unsubscribe
+    onNavigate(callback: (target: NavigateTarget) => void): Unsubscribe
   }
 }

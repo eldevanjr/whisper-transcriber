@@ -6,12 +6,30 @@ import {
   type Services
 } from '../../../src/main/ipc/handlers'
 import { AppError } from '../../../src/shared/errors'
-import { IPC, SEND } from '../../../src/shared/ipc'
+import { IPC, SEND, type McpStatus } from '../../../src/shared/ipc'
+import {
+  MCP_CLIENT_NAMES,
+  type ClientState,
+  type ClientStatus,
+  type McpClientId
+} from '../../../src/shared/mcp'
 import { DEFAULT_SETTINGS, type Settings } from '../../../src/shared/settings'
 
 const JOB = '11111111-1111-4111-8111-111111111111'
+const LAUNCHER = '/home/u/.config/Whisper Transcriber/mcp/whisper-transcriber-mcp'
 const APP_FRAME = { processId: 1, routingId: 1 }
 const TRUSTED: IpcEventLike = { sender: 'app', senderFrame: APP_FRAME }
+
+function clientStatus(id: McpClientId, state: ClientState): ClientStatus {
+  return {
+    id,
+    name: MCP_CLIENT_NAMES[id],
+    state,
+    lastUsedAt: null,
+    restartNeeded: false,
+    manual: { kind: 'json', text: `{ "${id}": "config manual" }` }
+  }
+}
 
 function setup(settingsOverride: Partial<Settings> = {}) {
   const handlers = new Map<string, (event: IpcEventLike, arg?: unknown) => Promise<unknown>>()
@@ -71,6 +89,7 @@ function setup(settingsOverride: Partial<Settings> = {}) {
     checkUpdates: vi.fn(() => Promise.resolve(null)),
     installUpdate: vi.fn(),
     dataDir: '/dados',
+    clearActivity: vi.fn(() => Promise.resolve()),
     appInfo: vi.fn(() => ({ version: '0.1.0', platform: 'linux', settingsRecovered: false })),
     externalUrls: new Set(['https://github.com/facebook/react']),
     liveCapabilities: vi.fn(() => ({ systemAudio: 'monitor' })),
@@ -84,6 +103,31 @@ function setup(settingsOverride: Partial<Settings> = {}) {
       pause: vi.fn(),
       resume: vi.fn(),
       audio: vi.fn()
+    },
+    mcp: {
+      status: vi.fn((): Promise<McpStatus> =>
+        Promise.resolve({
+          launcherOk: true,
+          launcherError: null,
+          launcherPath: LAUNCHER,
+          bridgeOk: true,
+          clients: [clientStatus('codex', 'connected')]
+        })
+      ),
+      connect: vi.fn((id: McpClientId) => Promise.resolve(clientStatus(id, 'connected'))),
+      disconnect: vi.fn((id: McpClientId) => Promise.resolve(clientStatus(id, 'found'))),
+      test: vi.fn(() => Promise.resolve({ ok: true, tools: 8 })),
+      activity: vi.fn(() =>
+        Promise.resolve([
+          { at: '2026-09-26T12:00:00.000Z', client: 'codex', tool: 'list_transcriptions' }
+        ])
+      )
+    },
+    background: {
+      onStarted: vi.fn(),
+      report: vi.fn(),
+      shortcutStatus: vi.fn(() => 'taken'),
+      suspendShortcut: vi.fn()
     }
   }
   const senders = new Map<string, (event: IpcEventLike, arg?: unknown) => void>()
@@ -206,8 +250,10 @@ describe('registerIpcHandlers', () => {
   it('limpar histórico só com a fila ociosa', async () => {
     const { call, services } = setup()
     expect(await call(IPC.historyClear)).toEqual(ok({ count: 2, bytes: 10 }))
+    expect(services.clearActivity).toHaveBeenCalledTimes(1)
     services.queue.isIdle.mockReturnValue(false)
     expect(await call(IPC.historyClear)).toEqual(fail('INVALID_REQUEST'))
+    expect(services.clearActivity).toHaveBeenCalledTimes(1)
   })
 
   it('modelos: status, instalar e remover (menos o que está em uso)', async () => {
@@ -364,5 +410,112 @@ describe('IPC do ao vivo', () => {
     send(SEND.liveAudio, { track: 'alguem', seq: 6, pcm })
     send(SEND.liveAudio, { track: 'voce', seq: -1, pcm })
     expect(services.live.audio).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('IPC das IAs (MCP)', () => {
+  it('status, atividade e teste delegam ao serviço', async () => {
+    const { call, services } = setup()
+    expect(await call(IPC.mcpStatus)).toEqual(
+      ok({
+        launcherOk: true,
+        launcherError: null,
+        launcherPath: LAUNCHER,
+        bridgeOk: true,
+        clients: [clientStatus('codex', 'connected')]
+      })
+    )
+    expect(await call(IPC.mcpActivity)).toEqual(
+      ok([{ at: '2026-09-26T12:00:00.000Z', client: 'codex', tool: 'list_transcriptions' }])
+    )
+    expect(await call(IPC.mcpTest)).toEqual(ok({ ok: true, tools: 8 }))
+    expect(services.mcp.status).toHaveBeenCalledTimes(1)
+    expect(services.mcp.activity).toHaveBeenCalledTimes(1)
+    expect(services.mcp.test).toHaveBeenCalledTimes(1)
+  })
+
+  it('status carrega o motivo quando o lançador falhou', async () => {
+    const { call, services } = setup()
+    services.mcp.status.mockResolvedValueOnce({
+      launcherOk: false,
+      launcherError: 'sem permissão de escrita',
+      launcherPath: LAUNCHER,
+      bridgeOk: false,
+      clients: []
+    })
+    expect(await call(IPC.mcpStatus)).toEqual(
+      ok({
+        launcherOk: false,
+        launcherError: 'sem permissão de escrita',
+        launcherPath: LAUNCHER,
+        bridgeOk: false,
+        clients: []
+      })
+    )
+  })
+
+  it('id fora da lista ou origem não confiável → INVALID_REQUEST', async () => {
+    const { call, services } = setup()
+    expect(await call(IPC.mcpConnect, 'gigante')).toEqual(fail('INVALID_REQUEST'))
+    expect(await call(IPC.mcpDisconnect, 42)).toEqual(fail('INVALID_REQUEST'))
+    expect(
+      await call(IPC.mcpConnect, 'codex', { sender: 'outra', senderFrame: APP_FRAME })
+    ).toEqual(fail('INVALID_REQUEST'))
+    expect(await call(IPC.mcpStatus, 'extra')).toEqual(fail('INVALID_REQUEST'))
+    expect(await call(IPC.mcpActivity, Promise.resolve())).toEqual(fail('INVALID_REQUEST'))
+    expect(services.mcp.connect).not.toHaveBeenCalled()
+    expect(services.mcp.disconnect).not.toHaveBeenCalled()
+    expect(services.mcp.status).not.toHaveBeenCalled()
+    expect(services.mcp.activity).not.toHaveBeenCalled()
+  })
+
+  it('conectar com o acesso desligado liga o acesso antes de conectar', async () => {
+    const { call, services } = setup()
+    expect(services.settings.get().mcp.enabled).toBe(false)
+    expect(await call(IPC.mcpConnect, 'codex')).toEqual(ok(clientStatus('codex', 'connected')))
+    expect(services.settings.update).toHaveBeenCalledWith({
+      mcp: { enabled: true, allowTranscribe: true }
+    })
+    expect(services.mcp.connect).toHaveBeenCalledWith('codex')
+  })
+
+  it('conectar com o acesso ligado não mexe nas configurações', async () => {
+    const { call, services } = setup({ mcp: { enabled: true, allowTranscribe: false } })
+    expect(await call(IPC.mcpConnect, 'codex')).toEqual(ok(clientStatus('codex', 'connected')))
+    expect(services.settings.update).not.toHaveBeenCalled()
+    expect(services.mcp.connect).toHaveBeenCalledWith('codex')
+  })
+
+  it('desconectar devolve o estado do conector', async () => {
+    const { call, services } = setup()
+    expect(await call(IPC.mcpDisconnect, 'codex')).toEqual(ok(clientStatus('codex', 'found')))
+    expect(services.mcp.disconnect).toHaveBeenCalledWith('codex')
+  })
+})
+describe('IPC do segundo plano', () => {
+  it('começar uma sessão avisa o segundo plano (notificação e relógio)', async () => {
+    const { call, services } = setup()
+    const opts = { tracks: ['voce'], test: false, title: 'R' }
+    await call(IPC.liveStart, opts)
+    expect(services.background.onStarted).toHaveBeenCalledWith(opts)
+  })
+
+  it('relatos validados; status e suspensão do atalho', async () => {
+    const { call, services } = setup()
+    const failed = { kind: 'startFailed', error: { code: 'MIC_DENIED', message: 'negado' } }
+    expect(await call(IPC.backgroundReport, failed)).toEqual(ok(null))
+    expect(await call(IPC.backgroundReport, { kind: 'deviceLost' })).toEqual(ok(null))
+    expect(services.background.report).toHaveBeenCalledWith(failed)
+    for (const bad of [
+      { kind: 'outro' },
+      { kind: 'startFailed', error: { code: 'INEXISTENTE', message: 'x' } },
+      { kind: 'startFailed', error: { code: 'MIC_DENIED', message: 'x'.repeat(5001) } }
+    ]) {
+      expect(await call(IPC.backgroundReport, bad)).toEqual(fail('INVALID_REQUEST'))
+    }
+    expect(await call(IPC.backgroundShortcutStatus)).toEqual(ok('taken'))
+    expect(await call(IPC.backgroundSuspendShortcut, true)).toEqual(ok(null))
+    expect(services.background.suspendShortcut).toHaveBeenCalledWith(true)
+    expect(await call(IPC.backgroundSuspendShortcut, 'sim')).toEqual(fail('INVALID_REQUEST'))
   })
 })
