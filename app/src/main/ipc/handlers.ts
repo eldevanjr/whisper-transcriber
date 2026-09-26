@@ -1,16 +1,27 @@
 import { z } from 'zod'
-import { AppError, toAppError } from '../../shared/errors'
+import { AppError, ERROR_CODES, toAppError, type ErrorCode } from '../../shared/errors'
 import type { SystemInfo, UpdateInfo } from '../../shared/events'
 import { isJobId, type HistoryMeta } from '../../shared/history'
+import { sanitizeFileName } from '../../shared/media'
 import {
   IPC,
   SEND,
   type AppInfo,
+  type BackgroundReport,
   type IpcResult,
   type LiveCapabilities,
+  type McpStatus,
+  type McpTestResult,
   type MonitorVolume,
-  type LiveStartInput
+  type LiveStartInput,
+  type ShortcutStatus
 } from '../../shared/ipc'
+import {
+  MCP_CLIENT_IDS,
+  type ClientStatus,
+  type McpActivityLine,
+  type McpClientId
+} from '../../shared/mcp'
 import { formatForDevice, MODEL_FORMATS, MODEL_IDS } from '../../shared/models'
 import { TRACKS, type Track } from '../../shared/settings'
 import type { Installer } from '../downloads/installer'
@@ -43,6 +54,8 @@ export interface Services {
   installUpdate(): void
   dataDir: string
   appInfo(): AppInfo
+  /** "Limpar histórico" também apaga `mcp/activity.jsonl` (spec §12). */
+  clearActivity(): Promise<void>
   /** Links extras permitidos (páginas dos projetos em Licenças). */
   externalUrls: ReadonlySet<string>
   liveCapabilities(): LiveCapabilities
@@ -57,6 +70,20 @@ export interface Services {
     resume(): void
     audio(track: Track, seq: number, pcm: Int16Array): void
   }
+  /** Seção "IAs (MCP)" (spec §10.2). */
+  mcp: {
+    status(): Promise<McpStatus>
+    connect(id: McpClientId): Promise<ClientStatus>
+    disconnect(id: McpClientId): Promise<ClientStatus>
+    test(): Promise<McpTestResult>
+    activity(): Promise<McpActivityLine[]>
+  }
+  background: {
+    onStarted(input: LiveStartInput): void
+    report(report: BackgroundReport): void
+    shortcutStatus(): ShortcutStatus
+    suspendShortcut(on: boolean): void
+  }
 }
 
 const None = z.undefined()
@@ -64,6 +91,7 @@ const JobId = z.string().refine(isJobId, 'identificador inválido')
 const SetVersionSchema = z.object({ id: JobId, version: z.enum(['live', 'redo']) })
 const ModelIdSchema = z.enum(MODEL_IDS)
 const FormatSchema = z.enum(MODEL_FORMATS)
+const ClientIdSchema = z.enum(MCP_CLIENT_IDS)
 const ModelRefSchema = z.object({ id: ModelIdSchema, format: FormatSchema.default('ct2') })
 const TargetSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('model'), id: ModelIdSchema, format: FormatSchema.optional() }),
@@ -95,6 +123,17 @@ const LiveAudioSchema = z.object({
   seq: z.number().int().min(0),
   pcm: z.instanceof(Int16Array).refine((pcm) => pcm.length === BLOCK_48K, 'bloco de 100 ms')
 })
+const ReportSchema = z.discriminatedUnion('kind', [
+  z.object({
+    kind: z.literal('startFailed'),
+    error: z.object({
+      code: z.enum(ERROR_CODES as [ErrorCode, ...ErrorCode[]]),
+      message: z.string().max(5000),
+      detail: z.string().max(20_000).optional()
+    })
+  }),
+  z.object({ kind: z.literal('deviceLost') })
+])
 
 type On = <S extends z.ZodType>(
   channel: string,
@@ -102,14 +141,7 @@ type On = <S extends z.ZodType>(
   run: (arg: z.output<S>) => unknown
 ) => void
 
-export function sanitizeFileName(name: string): string {
-  // Troca separadores de pasta, caracteres proibidos no Windows e caracteres de controle.
-  const cleaned = name
-    .replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_')
-    .trim()
-    .slice(0, 200)
-  return cleaned === '' ? 'transcricao.txt' : cleaned
-}
+export { sanitizeFileName }
 
 async function invoke<S extends z.ZodType>(
   trusted: boolean,
@@ -142,6 +174,8 @@ export function registerIpcHandlers(
   registerDownloads(on, services)
   registerSystem(on, services)
   registerLive(on, services)
+  registerMcp(on, services)
+  registerBackground(on, services)
   // Blocos de áudio: canal sem resposta (send), validado e só do renderer do app.
   ipc.on(SEND.liveAudio, (event, raw) => {
     const parsed = LiveAudioSchema.safeParse(raw)
@@ -155,7 +189,11 @@ function registerLive(on: On, s: Services): void {
   on(IPC.liveCapabilities, None, () => s.liveCapabilities())
   on(IPC.liveMonitorVolume, None, () => s.monitorVolume.read())
   on(IPC.liveSetMonitorVolume, PercentSchema, (percent) => s.monitorVolume.set(percent))
-  on(IPC.liveStart, LiveStartSchema, (input) => s.live.start(input))
+  on(IPC.liveStart, LiveStartSchema, async (input) => {
+    const started = await s.live.start(input)
+    s.background.onStarted(input)
+    return started
+  })
   on(IPC.liveStop, None, () => s.live.stop())
   on(IPC.livePause, None, () => {
     s.live.pause()
@@ -163,6 +201,30 @@ function registerLive(on: On, s: Services): void {
   })
   on(IPC.liveResume, None, () => {
     s.live.resume()
+    return null
+  })
+}
+
+function registerMcp(on: On, s: Services): void {
+  on(IPC.mcpStatus, None, () => s.mcp.status())
+  on(IPC.mcpConnect, ClientIdSchema, async (id) => {
+    const { mcp } = s.settings.get()
+    // A confirmação é da tela; chegar aqui com o acesso desligado significa "permitir e conectar".
+    if (!mcp.enabled) await s.settings.update({ mcp: { ...mcp, enabled: true } })
+    return s.mcp.connect(id)
+  })
+  on(IPC.mcpDisconnect, ClientIdSchema, (id) => s.mcp.disconnect(id))
+  on(IPC.mcpTest, None, () => s.mcp.test())
+  on(IPC.mcpActivity, None, () => s.mcp.activity())
+}
+function registerBackground(on: On, s: Services): void {
+  on(IPC.backgroundReport, ReportSchema, (report) => {
+    s.background.report(report)
+    return null
+  })
+  on(IPC.backgroundShortcutStatus, None, () => s.background.shortcutStatus())
+  on(IPC.backgroundSuspendShortcut, z.boolean(), (on) => {
+    s.background.suspendShortcut(on)
     return null
   })
 }
@@ -191,10 +253,12 @@ function registerHistory(on: On, s: Services): void {
   on(IPC.historySetVersion, SetVersionSchema, ({ id, version }) => s.queue.setVersion(id, version))
   on(IPC.historyStats, None, () => s.history.stats())
   on(IPC.historyRemove, JobId, (id) => s.queue.removeEntry(id))
-  on(IPC.historyClear, None, () => {
+  on(IPC.historyClear, None, async () => {
     if (!s.queue.isIdle())
       throw new AppError('INVALID_REQUEST', 'Aguarde a fila terminar para limpar o histórico')
-    return s.history.clear()
+    const stats = await s.history.clear()
+    await s.clearActivity()
+    return stats
   })
 }
 

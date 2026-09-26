@@ -14,7 +14,8 @@
     "remove": "Remove",
     "retry": "Try again",
     "search": "Search",
-    "dismiss": "Dismiss notice"
+    "dismiss": "Dismiss notice",
+    "viaClient": "via {{client}}"
   },
   "errors": {
     "INVALID_MESSAGE": "The engine received an invalid request.",
@@ -53,7 +54,14 @@
     "LIVE_NOT_STARTED": "No live session is running.",
     "LIVE_ACTIVE": "A live transcription is already running.",
     "QUEUE_BUSY": "Wait for the queue to finish (or cancel the current file) to start live.",
-    "MIC_DENIED": "Microphone access was denied."
+    "MIC_DENIED": "Microphone access was denied.",
+    "MCP_DISABLED": "AI access is turned off in Whisper Transcriber (Settings → AI assistants).",
+    "TRANSCRIBE_DISABLED": "Transcribing via AI is turned off in Whisper Transcriber settings.",
+    "APP_START_TIMEOUT": "Whisper Transcriber did not start in time.",
+    "SETUP_INCOMPLETE": "Finish Whisper Transcriber setup and try again.",
+    "CONFIG_INVALID": "The AI configuration file has an error; use the manual configuration.",
+    "CONFIG_HAS_COMMENTS": "The AI file has comments; to avoid losing them, use the manual configuration.",
+    "CLIENT_CLI_FAILED": "The AI command failed."
   },
   "notices": {
     "cudaFallback": "The GPU failed; this transcription continued on the CPU.",
@@ -140,6 +148,7 @@
     },
     "drop": "Drop to transcribe",
     "settings": "Settings",
+    "connectAi": "Connect AIs",
     "cancel": "Cancel transcription",
     "cancelTitle": "Cancel the transcription?",
     "cancelMessage": "What has been transcribed from this file so far will be discarded.",
@@ -195,6 +204,7 @@
       "general": "General",
       "transcription": "Transcription",
       "live": "Live",
+      "ai": "AI assistants (MCP)",
       "storage": "Storage",
       "help": "Help",
       "about": "About",
@@ -210,7 +220,11 @@
         "dark": "Dark"
       },
       "updates": "Check for new versions",
-      "updatesHint": "Lets you know when a new version is out."
+      "updatesHint": "Lets you know when a new version is out.",
+      "closeToTray": "Keep running in the tray when the window is closed",
+      "closeToTrayHint": "The tray icon lets you record and open the app. On GNOME it needs the AppIndicator extension (included in Ubuntu).",
+      "openAtLogin": "Open when you sign in",
+      "openAtLoginHint": "Opens hidden in the tray, with the shortcut ready."
     },
     "models": {
       "title": "Model",
@@ -274,6 +288,74 @@
       "count": "{{count}} components",
       "backToList": "Back to list",
       "openPage": "Open project page"
+    },
+    "ai": {
+      "intro": "Let AI assistants on your computer read your transcriptions and request new ones. Nothing leaves your computer.",
+      "access": {
+        "title": "AI access",
+        "enabled": "Let AIs read my transcriptions",
+        "transcribe": "Let AIs transcribe files",
+        "ready": "Ready · {{count}} AIs connected",
+        "off": "Off",
+        "problem": "Problem: {{reason}}",
+        "test": "Test connection",
+        "testing": "Testing…",
+        "testOk": "Working ({{count}} tools)",
+        "testError": "Failed: {{message}}",
+        "notify": "Notify me when an AI requests a transcription",
+        "notifyHint": "System notification when it's requested and when it finishes; the tray icon shows a blue dot until you open the app."
+      },
+      "clients": {
+        "title": "AIs on this computer",
+        "missing": "Not found",
+        "found": "Found",
+        "connected": "Connected",
+        "used": "used {{time}}",
+        "restart": "restart {{name}} to use",
+        "connect": "Connect",
+        "connecting": "Connecting…",
+        "disconnect": "Disconnect",
+        "disconnecting": "Disconnecting…",
+        "manual": "Manual config",
+        "copy": "Copy",
+        "copied": "✓ Copied",
+        "configInvalid": "The {{name}} config file has an error; use the manual config.",
+        "configHasComments": "The {{name}} file has comments; to avoid losing them, use the manual config."
+      },
+      "confirm": {
+        "title": "Allow access?",
+        "message": "Let AIs read your transcriptions? You can turn it off anytime.",
+        "confirm": "Allow and connect",
+        "cancel": "Cancel"
+      },
+      "other": {
+        "title": "Other AI",
+        "description": "Any MCP-compatible (stdio) app works with this command:",
+        "command": "Command",
+        "json": "Generic JSON (mcpServers)",
+        "copyCommand": "Copy command",
+        "copyJson": "Copy JSON"
+      },
+      "web": {
+        "title": "ChatGPT and claude.ai (web)",
+        "description": "These assistants run in the cloud and can only reach servers published on the internet. To keep your transcriptions on your computer, they are not supported."
+      },
+      "activity": {
+        "title": "Recent activity",
+        "empty": "No AI has used it yet.",
+        "line": "{{client}} · {{tool}} · {{time}}",
+        "lineWithTitle": "{{client}} · {{tool}} “{{title}}” · {{time}}",
+        "tools": {
+          "list_transcriptions": "listed transcriptions",
+          "search_transcriptions": "searched transcriptions",
+          "get_transcription": "read a transcription",
+          "get_audio": "fetched an audio",
+          "export_transcription": "exported a transcription",
+          "get_activity": "checked the activity",
+          "get_status": "tracked a transcription",
+          "transcribe_file": "requested a transcription"
+        }
+      }
     }
   },
   "help": {
@@ -318,8 +400,6 @@
     "defaultMic": "System default",
     "unnamedMic": "Microphone {{n}}",
     "level": "Level: {{name}}",
-    "you": "You",
-    "others": "Others",
     "systemAudio": "Computer audio (Others)",
     "systemAudioHint": "What plays on the computer, such as the voices on the call.",
     "systemUnavailable": "Not available on this system.",
@@ -360,6 +440,49 @@
     "reconnect": "Reconnect",
     "permission": "Open system permissions",
     "retry": "Try again",
-    "defaultTitle": "Meeting {{date}}"
+    "defaultTitle": "Meeting {{date}}",
+    "shortcut": "Start/stop shortcut",
+    "shortcutHint": "Works even with the window closed.",
+    "shortcutRecord": "Record shortcut: {{current}}",
+    "shortcutRecording": "Press the key combination…",
+    "shortcutDefault": "Restore default",
+    "shortcutOff": "Turn off",
+    "shortcutNone": "Off",
+    "shortcutTaken": "Another program already uses this combination. Choose another one.",
+    "shortcutUnavailable": "The system didn't allow the shortcut. The tray icon still works.",
+    "shortcutNeedsModifier": "Use Ctrl, Alt or Super together with a letter, number or F1–F24."
+  },
+  "background": {
+    "tooltip": "Whisper Transcriber",
+    "tooltipRecording": "Recording — {{time}}",
+    "tooltipPaused": "Paused — {{time}}",
+    "statusRecording": "● Recording",
+    "statusPaused": "● Paused",
+    "start": "Start recording",
+    "stop": "Stop recording",
+    "pause": "Pause",
+    "resume": "Resume",
+    "open": "Open Whisper Transcriber",
+    "finishSetup": "Finish setting up",
+    "quit": "Quit",
+    "withShortcut": "{{label}} ({{shortcut}})",
+    "started": "Recording",
+    "tracksBoth": "You + Others",
+    "tracksMic": "You only",
+    "saved": "Meeting saved",
+    "savedBody": "{{title}} — {{minutes}} min",
+    "failed": "The recording ended with an error",
+    "startFailed": "Couldn't start recording",
+    "setupFirst": "Finish setting up the app to record.",
+    "deviceLost": "Microphone disconnected",
+    "deviceLostBody": "Recording paused.",
+    "hiddenTitle": "Still running in the tray",
+    "hiddenBody": "Press {{shortcut}} to record. To quit, use the tray icon.",
+    "hiddenBodyNoShortcut": "To record or quit, use the tray icon.",
+    "recording": "Recording",
+    "aiRequested": "{{client}} requested a transcription",
+    "aiDone": "Transcription ready ({{client}})",
+    "aiFailed": "Transcription failed ({{client}})",
+    "aiFailedBody": "{{title}}: {{reason}}"
   }
 }

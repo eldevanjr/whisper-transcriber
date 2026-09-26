@@ -34,6 +34,26 @@ describe('Sidebar', () => {
     await expectAccessible(container)
   })
 
+  it('selo "via <IA>" na fila e no histórico; desconhecido mostra o nome cru; ausente não mostra', async () => {
+    const current = makeMeta({
+      fileName: 'atual.mp4',
+      status: 'processing',
+      requestedBy: 'claude-code'
+    })
+    const old = makeMeta({ fileName: 'antigo.mp4', requestedBy: 'minha-ia' })
+    const plain = makeMeta({ fileName: 'app.mp4' })
+    const api = withEntries(current, old, plain)
+    api.current = current.id
+    const { container } = await renderWithApp(<Sidebar />, { api })
+    const queue = screen.getByRole('region', { name: 'Fila (1)' })
+    expect(within(queue).getByText('via Claude Code')).toBeInTheDocument()
+    const history = screen.getByRole('region', { name: 'Histórico' })
+    expect(within(history).getByText('via minha-ia')).toBeInTheDocument()
+    expect(within(history).queryByText(/^via /)).toBeInTheDocument()
+    expect(screen.getAllByText(/^via /)).toHaveLength(2)
+    await expectAccessible(container)
+  })
+
   it('selecionar marca o item; remover tira da fila', async () => {
     const waiting = makeMeta({ fileName: 'espera.mp3', status: 'queued' })
     const api = withEntries(waiting)

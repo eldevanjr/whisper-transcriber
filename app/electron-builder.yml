@@ -17,6 +17,9 @@ extraResources:
   # Worker PyInstaller (scripts/build-worker.*) → process.resourcesPath/worker
   - from: resources/worker
     to: worker
+  # Ícones da bandeja (src/main/background/icons.ts) → process.resourcesPath/tray
+  - from: resources/tray
+    to: tray
   - from: ../LICENSE
     to: LICENSE
   - from: ../NOTICE

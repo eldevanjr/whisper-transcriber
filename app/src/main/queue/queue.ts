@@ -101,7 +101,7 @@ export class TranscriptionQueue {
     this.pump()
   }
 
-  async enqueue(paths: string[]): Promise<EnqueueResult> {
+  async enqueue(paths: string[], options: { requestedBy?: string } = {}): Promise<EnqueueResult> {
     const settings = this.deps.settings.get()
     const model = requireModel(settings)
     const accepted: HistoryMeta[] = []
@@ -116,7 +116,8 @@ export class TranscriptionQueue {
         sourcePath,
         mediaKind,
         model,
-        language: languageOf(settings)
+        language: languageOf(settings),
+        ...(options.requestedBy === undefined ? {} : { requestedBy: options.requestedBy })
       })
       accepted.push(meta)
       this.pending.push(meta.id)

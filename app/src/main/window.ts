@@ -15,6 +15,8 @@ export function secureWebPreferences(preloadPath: string, isDev: boolean): WebPr
     allowRunningInsecureContent: false,
     webviewTag: false,
     spellcheck: false,
+    // Escondida na bandeja o ao vivo segue gravando: a captura e os timers não podem desacelerar.
+    backgroundThrottling: false,
     devTools: isDev
   }
 }
@@ -27,6 +29,36 @@ export interface MainWindowOptions extends HardenOptions {
   dark: boolean
   /** Ícone da janela (Linux; no Windows/macOS vem do executável/bundle). */
   icon?: string
+  /** Aberta pelo login: carrega escondida na bandeja. */
+  startHidden?: boolean
+}
+
+export interface TrayWindowLike {
+  on(event: 'close', listener: (event: { preventDefault(): void }) => void): void
+  hide(): void
+}
+
+/**
+ * A pessoa está olhando o app: visível e em foco. Só o foco não basta — no Linux a janela
+ * escondida na bandeja continua dizendo que tem foco.
+ */
+export function isWindowInView(
+  window: { isVisible(): boolean; isFocused(): boolean } | null
+): boolean {
+  return window !== null && window.isVisible() && window.isFocused()
+}
+
+/** Fechar a janela esconde na bandeja; "Sair" (ou a opção desligada) fecha de verdade. */
+export function keepInTray(
+  window: TrayWindowLike,
+  options: { shouldHide(): boolean; onHidden(): void }
+): void {
+  window.on('close', (event) => {
+    if (!options.shouldHide()) return
+    event.preventDefault()
+    window.hide()
+    options.onHidden()
+  })
 }
 
 export function createMainWindow(options: MainWindowOptions): BrowserWindow {
@@ -43,8 +75,14 @@ export function createMainWindow(options: MainWindowOptions): BrowserWindow {
     webPreferences: secureWebPreferences(options.preloadPath, options.isDev)
   })
   hardenWebContents(window.webContents, options)
+  // Fechada (escondida na bandeja) antes do primeiro quadro: o "pronta" que chega depois não a
+  // traz de volta.
+  let closed = false
+  window.on('close', () => {
+    closed = true
+  })
   window.once('ready-to-show', () => {
-    window.show()
+    if (!options.startHidden && !closed) window.show()
   })
   window.webContents.on('render-process-gone', () => {
     window.reload()

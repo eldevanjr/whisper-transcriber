@@ -176,6 +176,19 @@ describe('LiveService', () => {
     await ctx.service.stop()
   })
 
+  it('dois stop() concorrentes compartilham a mesma finalização', async () => {
+    const ctx = await setup()
+    await ctx.service.start({ tracks: ['voce'], test: false, title: 'R' })
+    const first = ctx.service.stop()
+    const second = ctx.service.stop()
+    expect(second).toBe(first)
+    const [a, b] = await Promise.all([first, second])
+    expect(a).toBe(b)
+    expect(ctx.requests.filter((r) => r.cmd === 'live_stop')).toHaveLength(1)
+    expect(ctx.requests.filter((r) => r.cmd === 'live_finalize')).toHaveLength(1)
+    expect(ctx.queue.releaseLive).toHaveBeenCalledTimes(1)
+  })
+
   it('pausa com o worker fora do ar só registra no log', async () => {
     const ctx = await setup()
     await ctx.service.start({ tracks: ['voce'], test: true, title: 'T' })

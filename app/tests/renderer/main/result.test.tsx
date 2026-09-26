@@ -44,6 +44,35 @@ describe('ResultPanel', () => {
     await expectAccessible(container)
   })
 
+  it('cabeçalho mostra "via <IA>"; desconhecido mostra o nome cru; sem requestedBy, nada', async () => {
+    const mapped = makeMeta({ fileName: 'aula 03.mp4', requestedBy: 'claude-code' })
+    const detail: HistoryDetail = { meta: mapped, transcript, videoAvailable: true, hasRedo: false }
+    const { container, rerender } = await renderWithApp(
+      <PlayerProvider>
+        <ResultPanel meta={mapped} detail={detail} />
+      </PlayerProvider>
+    )
+    expect(screen.getByText('via Claude Code')).toBeInTheDocument()
+    await expectAccessible(container)
+
+    const unknown = makeMeta({ fileName: 'outra.mp4', requestedBy: 'minha-ia' })
+    rerender(
+      <PlayerProvider>
+        <ResultPanel
+          meta={unknown}
+          detail={{ meta: unknown, transcript, videoAvailable: true, hasRedo: false }}
+        />
+      </PlayerProvider>
+    )
+    expect(screen.getByText('via minha-ia')).toBeInTheDocument()
+    expect(screen.queryByText('via Claude Code')).not.toBeInTheDocument()
+  })
+
+  it('sem requestedBy não mostra selo no resultado', async () => {
+    await setup()
+    expect(screen.queryByText(/^via /)).not.toBeInTheDocument()
+  })
+
   it('aba Texto: parágrafos clicáveis que pulam o player e destacam o que toca', async () => {
     const { user, container } = await setup()
     await user.click(screen.getByRole('tab', { name: 'Texto' }))

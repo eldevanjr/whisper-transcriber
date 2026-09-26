@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_SETTINGS, SettingsPatchSchema, SettingsSchema } from '../../src/shared/settings'
+import {
+  DEFAULT_MCP_SETTINGS,
+  DEFAULT_SETTINGS,
+  DEFAULT_TRAY_SETTINGS,
+  SettingsPatchSchema,
+  SettingsSchema
+} from '../../src/shared/settings'
 
 describe('settings', () => {
   it('padrões são válidos, sem modelo (onboarding pendente) e em CPU', () => {
@@ -36,5 +42,54 @@ describe('settings do ao vivo', () => {
     expect(
       SettingsPatchSchema.safeParse({ live: { ...DEFAULT_SETTINGS.live, pauseS: 2 } }).success
     ).toBe(true)
+  })
+})
+
+describe('settings de IAs (MCP)', () => {
+  it('o padrão deixa o acesso desligado e transcrever ligado', () => {
+    expect(DEFAULT_MCP_SETTINGS).toEqual({ enabled: false, allowTranscribe: true })
+    expect(DEFAULT_SETTINGS.mcp).toEqual(DEFAULT_MCP_SETTINGS)
+    expect(SettingsSchema.parse(DEFAULT_SETTINGS).mcp).toEqual(DEFAULT_MCP_SETTINGS)
+  })
+
+  it('configurações antigas sem "mcp" ganham o padrão', () => {
+    const old: Record<string, unknown> = { ...DEFAULT_SETTINGS }
+    delete old.mcp
+    const parsed = SettingsSchema.parse(old)
+    expect(parsed.mcp).toEqual({ enabled: false, allowTranscribe: true })
+  })
+
+  it('patch troca o objeto "mcp" inteiro: parcial é recusado, completo é aceito', () => {
+    expect(SettingsPatchSchema.safeParse({ mcp: { enabled: true } }).success).toBe(false)
+    expect(SettingsPatchSchema.safeParse({ mcp: { allowTranscribe: false } }).success).toBe(false)
+    expect(
+      SettingsPatchSchema.safeParse({ mcp: { enabled: true, allowTranscribe: false } })
+    ).toMatchObject({
+      success: true,
+      data: { mcp: { enabled: true, allowTranscribe: false } }
+    })
+  })
+})
+
+describe('configurações da bandeja', () => {
+  it('settings sem "tray" (de antes da bandeja) recebem o padrão', () => {
+    const old: Record<string, unknown> = { ...DEFAULT_SETTINGS }
+    delete old.tray
+    expect(SettingsSchema.parse(old).tray).toEqual(DEFAULT_TRAY_SETTINGS)
+    expect(DEFAULT_TRAY_SETTINGS).toEqual({
+      closeToTray: true,
+      openAtLogin: true,
+      shortcut: 'CommandOrControl+Alt+R',
+      notifyAi: true
+    })
+  })
+
+  it('atalho: accelerator válido ou null; o resto é recusado', () => {
+    const patch = (shortcut: unknown) =>
+      SettingsPatchSchema.safeParse({ tray: { ...DEFAULT_TRAY_SETTINGS, shortcut } }).success
+    expect(patch('Alt+F9')).toBe(true)
+    expect(patch(null)).toBe(true)
+    expect(patch('Shift+R')).toBe(false)
+    expect(patch('Alt')).toBe(false)
   })
 })

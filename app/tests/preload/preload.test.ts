@@ -78,7 +78,19 @@ describe('preload', () => {
       [() => api.live.monitorVolume(), IPC.liveMonitorVolume, undefined],
       [() => api.live.setMonitorVolume(100), IPC.liveSetMonitorVolume, 100],
       [() => api.live.pause(), IPC.livePause, undefined],
-      [() => api.live.resume(), IPC.liveResume, undefined]
+      [() => api.live.resume(), IPC.liveResume, undefined],
+      [() => api.mcpStatus(), IPC.mcpStatus, undefined],
+      [() => api.mcpConnect('codex'), IPC.mcpConnect, 'codex'],
+      [() => api.mcpDisconnect('codex'), IPC.mcpDisconnect, 'codex'],
+      [() => api.mcpTest(), IPC.mcpTest, undefined],
+      [() => api.mcpActivity(), IPC.mcpActivity, undefined],
+      [
+        () => api.background.report({ kind: 'deviceLost' }),
+        IPC.backgroundReport,
+        { kind: 'deviceLost' }
+      ],
+      [() => api.background.shortcutStatus(), IPC.backgroundShortcutStatus, undefined],
+      [() => api.background.suspendShortcut(true), IPC.backgroundSuspendShortcut, true]
     ]
     for (const [run, channel, arg] of calls) {
       await expect(run()).resolves.toBe('r')
@@ -101,7 +113,9 @@ describe('preload', () => {
       [(cb) => api.queue.onEvent(cb), EVENTS.queue],
       [(cb) => api.downloads.onEvent(cb), EVENTS.download],
       [(cb) => api.updates.onEvent(cb), EVENTS.update],
-      [(cb) => api.live.onEvent(cb), EVENTS.live]
+      [(cb) => api.live.onEvent(cb), EVENTS.live],
+      [(cb) => api.background.onCommand(cb), EVENTS.backgroundCommand],
+      [(cb) => api.background.onNavigate(cb), EVENTS.backgroundNavigate]
     ]
     for (const [subscribe, channel] of subscriptions) {
       const callback = vi.fn()

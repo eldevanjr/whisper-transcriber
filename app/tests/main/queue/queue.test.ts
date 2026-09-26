@@ -1125,3 +1125,13 @@ describe('refazer o ao vivo', () => {
     })
   })
 })
+
+describe('TranscriptionQueue.requestedBy', () => {
+  it('grava o cliente MCP que pediu a transcrição', async () => {
+    const { queue, history } = await setup()
+    const { accepted } = await queue.enqueue(['/v/aula.mp4'], { requestedBy: 'claude-code' })
+    expect(accepted[0]?.requestedBy).toBe('claude-code')
+    expect((await history.get(accepted[0]!.id)).requestedBy).toBe('claude-code')
+    await queue.whenIdle()
+  })
+})

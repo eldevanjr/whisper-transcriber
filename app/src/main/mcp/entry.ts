@@ -1,0 +1,105 @@
+import { mkdir } from 'node:fs/promises'
+import { join } from 'node:path'
+import type { Readable, Writable } from 'node:stream'
+import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
+import type { App } from 'electron'
+import type electronLog from 'electron-log/main'
+import { DEFAULT_SETTINGS, SettingsSchema, type Settings } from '../../shared/settings'
+import { resolveSpeakerLabels } from '../../shared/speakers'
+import { readJson } from '../fs-utils'
+import { HistoryStore } from '../history/store'
+import type { AppPaths } from '../paths'
+import { ActivityLog } from './activity'
+import { BridgeClient, createLiveBridge, type BridgeClientLike } from './bridge-client'
+import { createAppRunner, type SpawnFn } from './launch-app'
+import type { LauncherTarget } from './launcher'
+import { TranscriptLibrary } from './library'
+import { createMcpServer } from './server'
+
+/** Só o que o processo MCP usa do `app` do Electron (spec §5.2). */
+export type McpApp = Pick<
+  App,
+  | 'disableHardwareAcceleration'
+  | 'dock'
+  | 'setPath'
+  | 'getVersion'
+  | 'getLocale'
+  | 'whenReady'
+  | 'quit'
+>
+
+/** O electron-log de produção; os testes passam um dublê (console desligado, só arquivo). */
+export type McpLogger = Pick<typeof electronLog, 'info' | 'warn' | 'error' | 'transports'>
+
+export interface McpDeps {
+  app: McpApp
+  stdin: Readable
+  stdout: Writable
+  paths: AppPaths
+  logger: McpLogger
+  /** Cliente da ponte e alvo do lançador; os testes injetam para exercitar o adaptador. */
+  client?: BridgeClientLike
+  launcherTarget?: LauncherTarget | null
+  spawn?: SpawnFn
+}
+
+/** Tamanho máximo de `logs/mcp.log` (spec §12). */
+const LOG_MAX_BYTES = 1024 * 1024
+
+/** `--mcp` desvia o processo antes do `requestSingleInstanceLock` (spec §5.2). */
+export function isMcpMode(argv: readonly string[]): boolean {
+  return argv.includes('--mcp')
+}
+
+/** Lê `settings.json` a cada chamada, sem escrever nada no disco (spec §5.2/§11). */
+export function readSettingsFrom(settingsPath: string): () => Promise<Settings> {
+  return async () => {
+    try {
+      const parsed = SettingsSchema.safeParse(await readJson(settingsPath))
+      return parsed.success ? parsed.data : DEFAULT_SETTINGS
+    } catch {
+      return DEFAULT_SETTINGS
+    }
+  }
+}
+
+/**
+ * Prepara o Electron para o processo MCP e liga o servidor ao stdio (spec §5.2): sem janela,
+ * sem lock, perfil (`sessionData`) próprio e log só em `logs/mcp.log`.
+ */
+export async function runMcp(deps: McpDeps): Promise<void> {
+  const { app, stdin, stdout, paths, logger } = deps
+  app.disableHardwareAcceleration()
+  if (process.platform === 'darwin') app.dock?.hide()
+  await mkdir(paths.mcpSession, { recursive: true, mode: 0o700 })
+  app.setPath('sessionData', paths.mcpSession)
+  logger.transports.file.resolvePathFn = () => join(paths.logs, 'mcp.log')
+  logger.transports.file.maxSize = LOG_MAX_BYTES
+  logger.transports.console.level = false
+  logger.info(`[mcp] iniciando (versão ${app.getVersion()})`)
+  await app.whenReady()
+  const readSettings = readSettingsFrom(paths.settings)
+  const settings = await readSettings()
+  // Rótulos do ao vivo no idioma da interface; sem escolha, o locale do sistema (pt→pt-BR etc.).
+  const labels =
+    settings.uiLanguage === null
+      ? resolveSpeakerLabels(null, app.getLocale())
+      : resolveSpeakerLabels(settings.uiLanguage)
+  const client = deps.client ?? new BridgeClient(paths)
+  const ensureRunning = createAppRunner({
+    launcherTarget: deps.launcherTarget ?? null,
+    client,
+    ...(deps.spawn === undefined ? {} : { spawn: deps.spawn })
+  })
+  const server = createMcpServer({
+    library: new TranscriptLibrary(new HistoryStore(paths.history), labels),
+    activity: new ActivityLog(paths.mcpActivity),
+    readSettings,
+    bridge: createLiveBridge({ client, ensureRunning }),
+    version: app.getVersion()
+  })
+  await server.connect(new StdioServerTransport(stdin, stdout))
+  stdin.on('end', () => {
+    app.quit()
+  })
+}

@@ -5,6 +5,7 @@ import { useLiveSupport } from '../../hooks/useLiveSupport'
 import { MicSelect, SystemAudioToggle } from '../live/LiveFields'
 import { MonitorVolumeSlider } from '../live/MonitorVolume'
 import { PauseSlider } from '../live/PauseSlider'
+import { ShortcutField } from './ShortcutField'
 
 /** Padrões do ao vivo: a tela de preparar começa com eles. */
 export function LiveSection() {
@@ -20,6 +21,9 @@ export function LiveSection() {
       </SettingsCard>
       <SettingsCard title={t('live.transcription')}>
         <PauseSlider />
+      </SettingsCard>
+      <SettingsCard title={t('live.shortcut')}>
+        <ShortcutField />
       </SettingsCard>
     </div>
   )

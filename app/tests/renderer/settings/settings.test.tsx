@@ -1,6 +1,8 @@
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
+import type { ShortcutStatus } from '../../../src/shared/ipc'
 import { AboutSection } from '../../../src/renderer/src/screens/settings/AboutSection'
+import { LiveSection } from '../../../src/renderer/src/screens/settings/LiveSection'
 import { SettingsScreen } from '../../../src/renderer/src/screens/settings/SettingsScreen'
 import type { SettingsSection } from '../../../src/renderer/src/store/app-store'
 import { apiError, FakeApi, makeMeta, SYSTEM_INFO } from '../fake-api'
@@ -522,5 +524,100 @@ describe('Ao vivo', () => {
     expect(
       screen.queryByRole('slider', { name: 'Volume de captura do áudio do computador' })
     ).not.toBeInTheDocument()
+  })
+})
+
+describe('bandeja e atalho', () => {
+  it('Geral: continuar na bandeja e abrir com o sistema', async () => {
+    const { user, api } = await open('general')
+    await user.click(
+      screen.getByRole('switch', { name: 'Ao fechar a janela, continuar na bandeja' })
+    )
+    expect(api.settings.update).toHaveBeenLastCalledWith({
+      tray: expect.objectContaining({ closeToTray: false }) as unknown
+    })
+    await user.click(screen.getByRole('switch', { name: 'Abrir ao entrar no computador' }))
+    expect(api.settings.update).toHaveBeenLastCalledWith({
+      tray: expect.objectContaining({ openAtLogin: false }) as unknown
+    })
+  })
+
+  it('Ao vivo: grava o atalho com o atual suspenso; padrão e desligar', async () => {
+    const { user, api } = await open('live')
+    const field = screen.getByRole('button', { name: 'Gravar atalho: Ctrl+Alt+R' })
+    await user.click(field)
+    expect(api.background.suspendShortcut).toHaveBeenLastCalledWith(true)
+    expect(field).toHaveTextContent('Pressione a combinação…')
+    fireEvent.keyDown(field, { key: 'Control', code: 'ControlLeft', ctrlKey: true })
+    fireEvent.keyDown(field, { key: 'r', code: 'KeyR' }) // sem modificador
+    expect(screen.getByRole('alert')).toHaveTextContent('Use Ctrl, Alt ou Super')
+    fireEvent.keyDown(field, { key: 'k', code: 'KeyK', ctrlKey: true, shiftKey: true })
+    expect(api.settings.update).toHaveBeenLastCalledWith({
+      tray: expect.objectContaining({ shortcut: 'CommandOrControl+Shift+K' }) as unknown
+    })
+    expect(api.background.suspendShortcut).toHaveBeenLastCalledWith(false)
+    await user.click(screen.getByRole('button', { name: 'Desligar' }))
+    expect(api.settings.update).toHaveBeenLastCalledWith({
+      tray: expect.objectContaining({ shortcut: null }) as unknown
+    })
+    await user.click(screen.getByRole('button', { name: 'Restaurar padrão' }))
+    expect(api.settings.update).toHaveBeenLastCalledWith({
+      tray: expect.objectContaining({ shortcut: 'CommandOrControl+Alt+R' }) as unknown
+    })
+  })
+
+  it('Esc ou sair do campo cancela a gravação e solta o atalho', async () => {
+    const { user, api } = await open('live')
+    const field = screen.getByRole('button', { name: /Gravar atalho/ })
+    await user.click(field)
+    fireEvent.keyDown(field, { key: 'Escape', code: 'Escape' })
+    expect(field).toHaveTextContent('Ctrl+Alt+R')
+    expect(api.background.suspendShortcut).toHaveBeenLastCalledWith(false)
+    await user.click(field)
+    fireEvent.blur(field)
+    expect(api.background.suspendShortcut).toHaveBeenLastCalledWith(false)
+    fireEvent.keyDown(field, { key: 'k', code: 'KeyK', ctrlKey: true }) // fora da gravação: nada
+    expect(api.settings.update).not.toHaveBeenCalled()
+  })
+
+  it('status do atalho: ocupado e recusado pelo sistema', async () => {
+    const api = new FakeApi()
+    api.background.shortcutStatus.mockResolvedValue('taken')
+    const first = await open('live', api)
+    expect(await screen.findByText(/já é usada por outro programa/)).toBeInTheDocument()
+    first.unmount()
+    api.background.shortcutStatus.mockResolvedValue('unavailable')
+    await open('live', api)
+    expect(await screen.findByText(/O sistema não permitiu o atalho/)).toBeInTheDocument()
+  })
+
+  it('antes do estado carregar usa os padrões da bandeja e do atalho', async () => {
+    await renderWithApp(<LiveSection />, { init: false })
+    expect(screen.getByRole('button', { name: 'Gravar atalho: Ctrl+Alt+R' })).toBeInTheDocument()
+  })
+
+  it('sair da tela gravando o atalho solta o atalho', async () => {
+    const { user, api, unmount } = await open('live')
+    const field = screen.getByRole('button', { name: /Gravar atalho/ })
+    await user.click(field)
+    expect(api.background.suspendShortcut).toHaveBeenLastCalledWith(true)
+    unmount()
+    expect(api.background.suspendShortcut).toHaveBeenLastCalledWith(false)
+  })
+
+  it('status do atalho pendente ao sair é descartado sem aviso', async () => {
+    const api = new FakeApi()
+    let resolveStatus: (status: ShortcutStatus) => void = () => undefined
+    api.background.shortcutStatus.mockImplementation(
+      () =>
+        new Promise<ShortcutStatus>((resolve) => {
+          resolveStatus = resolve
+        })
+    )
+    const { unmount } = await open('live', api)
+    unmount()
+    await act(async () => {
+      resolveStatus('ok')
+    })
   })
 })

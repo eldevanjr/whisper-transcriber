@@ -25,6 +25,9 @@ async function open(options: { api?: FakeApi; media?: FakeLiveMedia } = {}) {
   await waitFor(() => {
     expect(media.start).toHaveBeenCalled()
   })
+  await act(async () => {
+    await Promise.resolve() // deixa a captura montar os avisos antes de mexer nos timers
+  })
   return rendered
 }
 
@@ -178,7 +181,10 @@ describe('Ao vivo — preparar e testar', () => {
   it('antes de o estado carregar usa os padrões e não quebra', async () => {
     const media = new FakeLiveMedia()
     media.failure = new AppError('MIC_DENIED', 'negado')
-    await renderWithApp(<LiveScreen />, { media, init: false })
+    const rendered = await renderWithApp(<LiveScreen />, { media, init: false })
+    act(() => {
+      rendered.store.getState().openLive()
+    })
     expect(await screen.findByText('O acesso ao microfone foi negado.')).toBeInTheDocument()
     expect(screen.getByText('1,0 s')).toBeInTheDocument()
   })
@@ -195,11 +201,14 @@ describe('Ao vivo — preparar e testar', () => {
           }
         })
     )
-    const { unmount } = await renderWithApp(<LiveScreen />, { media })
+    const rendered = await renderWithApp(<LiveScreen />, { media })
+    act(() => {
+      rendered.store.getState().openLive()
+    })
     await waitFor(() => {
       expect(media.start).toHaveBeenCalled()
     })
-    unmount()
+    rendered.unmount()
     await act(async () => {
       release()
       await Promise.resolve()
@@ -217,6 +226,9 @@ describe('Ao vivo — preparar e testar', () => {
     api.live.capabilities.mockReturnValueOnce(support.promise)
     media.devices.mockReturnValueOnce(devices.promise)
     const first = await renderWithApp(<LiveScreen />, { api, media })
+    act(() => {
+      first.store.getState().openLive()
+    })
     first.unmount()
     await act(async () => {
       support.resolve({ systemAudio: 'monitor' })
@@ -228,6 +240,9 @@ describe('Ao vivo — preparar e testar', () => {
     const failure = deferred<never>()
     media.start.mockReturnValueOnce(failure.promise)
     const second = await renderWithApp(<LiveScreen />, { api, media })
+    act(() => {
+      second.store.getState().openLive()
+    })
     await waitFor(() => {
       expect(media.start).toHaveBeenCalled()
     })

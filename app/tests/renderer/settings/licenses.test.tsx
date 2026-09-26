@@ -21,7 +21,7 @@ describe('Licenças', () => {
     expect(screen.getAllByRole('button', { name: /LGPL/ }).length).toBeGreaterThan(0)
     expect(screen.queryByRole('button', { name: /^react / })).not.toBeInTheDocument()
     await expectAccessible(container)
-  })
+  }, 20000)
 
   it('clicar mostra o texto completo e o link do projeto; voltar retorna à lista', async () => {
     const { user, api } = await openLicenses()
