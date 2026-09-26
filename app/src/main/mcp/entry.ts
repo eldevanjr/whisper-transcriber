@@ -4,8 +4,6 @@ import type { Readable, Writable } from 'node:stream'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import type { App } from 'electron'
 import type electronLog from 'electron-log/main'
-import { AppError } from '../../shared/errors'
-import type { ActivitySnapshot } from '../../shared/mcp'
 import { DEFAULT_SETTINGS, SettingsSchema, type Settings } from '../../shared/settings'
 import { resolveSpeakerLabels } from '../../shared/speakers'
 import { readJson } from '../fs-utils'
@@ -16,7 +14,7 @@ import { BridgeClient, createLiveBridge, type BridgeClientLike } from './bridge-
 import { createAppRunner, type SpawnFn } from './launch-app'
 import type { LauncherTarget } from './launcher'
 import { TranscriptLibrary } from './library'
-import { createMcpServer, type BridgePort } from './server'
+import { createMcpServer } from './server'
 
 /** Só o que o processo MCP usa do `app` do Electron (spec §5.2). */
 export type McpApp = Pick<
@@ -47,25 +45,6 @@ export interface McpDeps {
 
 /** Tamanho máximo de `logs/mcp.log` (spec §12). */
 const LOG_MAX_BYTES = 1024 * 1024
-
-/** Retrato de app fechado; a ponte real é a Task 7. */
-const CLOSED_APP: ActivitySnapshot = {
-  appRunning: false,
-  current: null,
-  pending: [],
-  live: null
-}
-
-/**
- * Ponte provisória do processo MCP: sem app aberto, a leitura vem só do disco e qualquer ação
- * que precise do motor responde que o app está fechado (a Task 7 troca pelo `BridgeClient` real).
- */
-export const closedAppBridge: BridgePort = {
-  activity: () => Promise.resolve(CLOSED_APP),
-  status: () => Promise.resolve(null),
-  transcribe: () =>
-    Promise.reject(new AppError('WORKER_UNAVAILABLE', 'Whisper Transcriber is not running'))
-}
 
 /** `--mcp` desvia o processo antes do `requestSingleInstanceLock` (spec §5.2). */
 export function isMcpMode(argv: readonly string[]): boolean {

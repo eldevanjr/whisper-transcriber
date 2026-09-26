@@ -4,13 +4,7 @@ import { join } from 'node:path'
 import { PassThrough } from 'node:stream'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BridgeClientLike } from '../../../src/main/mcp/bridge-client'
-import {
-  closedAppBridge,
-  isMcpMode,
-  readSettingsFrom,
-  runMcp,
-  type McpDeps
-} from '../../../src/main/mcp/entry'
+import { isMcpMode, readSettingsFrom, runMcp, type McpDeps } from '../../../src/main/mcp/entry'
 import { appPaths } from '../../../src/main/paths'
 import { DEFAULT_SETTINGS } from '../../../src/shared/settings'
 import { makeTempDir } from '../../helpers/tmp'
@@ -262,21 +256,6 @@ describe('readSettingsFrom', () => {
     const wrong = join(root, 'wrong.json')
     await writeFile(wrong, JSON.stringify({ version: 1 }), 'utf8')
     expect(await readSettingsFrom(wrong)()).toEqual(DEFAULT_SETTINGS)
-  })
-})
-
-describe('closedAppBridge', () => {
-  it('answers as if the app were closed', async () => {
-    expect(await closedAppBridge.activity()).toEqual({
-      appRunning: false,
-      current: null,
-      pending: [],
-      live: null
-    })
-    expect(await closedAppBridge.status('01930000-0000-7000-8000-000000000000')).toBeNull()
-    await expect(closedAppBridge.transcribe('/tmp/a.mp4', 'codex', false)).rejects.toMatchObject({
-      code: 'WORKER_UNAVAILABLE'
-    })
   })
 })
 

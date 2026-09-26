@@ -29,6 +29,9 @@ export function createClaudeCodeConnector(deps: ConnectorDeps): McpClientConnect
     status,
     detect: async () => (await status()).state,
     connect: async () => {
+      // `mcp add` recusa um nome que já existe: uma entrada antiga (outro caminho) seria
+      // impossível de atualizar pelo botão. Remove antes; a falha (não existia) é esperada.
+      await runFound(deps.cli, 'claude', REMOVE_ARGS).catch(() => undefined)
       await runFound(deps.cli, 'claude', [...ADD_ARGS, deps.launcherPath])
       return { restartNeeded: false }
     },

@@ -44,6 +44,14 @@ describe('claude-code', () => {
     ])
   })
 
+  it('connect: remove a entrada antiga antes de adicionar (substitui config de outro caminho)', async () => {
+    const cli = recordingCli('/bin/claude')
+    cli.run.mockRejectedValueOnce(new Error('No MCP server found'))
+    const connector = createClaudeCodeConnector(makeDeps({ cli }))
+    await connector.connect()
+    expect(cli.run.mock.calls.map(([, args]) => args[1])).toEqual(['remove', 'add'])
+  })
+
   it('connect: sem executável vira CLIENT_CLI_FAILED', async () => {
     const connector = createClaudeCodeConnector(makeDeps({ cli: recordingCli(null) }))
     await expect(connector.connect()).rejects.toMatchObject({ code: 'CLIENT_CLI_FAILED' })
