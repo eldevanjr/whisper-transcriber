@@ -202,7 +202,10 @@ async function main(): Promise<void> {
     queue,
     settings,
     platform: process.platform,
-    version: app.getVersion()
+    version: app.getVersion(),
+    // O nome do named pipe (Windows) leva o hash do usuário: sem o env, todos os usuários da
+    // máquina disputariam o mesmo pipe (spec §7.1).
+    env: process.env
   }).catch((error: unknown) => {
     logger.error(`[mcp] não foi possível subir a ponte: ${String(error)}`)
     return { address: '', close: () => Promise.resolve() }

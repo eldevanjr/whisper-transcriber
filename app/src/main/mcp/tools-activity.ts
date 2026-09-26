@@ -13,6 +13,7 @@ import { AppError } from '../../shared/errors'
 import type { JobStatus, TranscriptEntry } from '../../shared/history'
 import type { ActivitySnapshot, JobProgress, LiveActivity, PendingJob } from '../../shared/mcp'
 import { mediaKindOf } from '../../shared/media'
+import type { Settings } from '../../shared/settings'
 import type { BridgePort } from './server'
 import { runTool, success, TRANSCRIPTION_WARNING, type McpContext } from './tools-read'
 
@@ -68,7 +69,7 @@ export function registerActivityTools(
   server.registerTool(
     'get_status',
     {
-      description: `Get one transcription status and the segments transcribed since a previous call. The "after" cursor is a count over the current version; during a multi-track live redo the active version can flip from the append-order partial to the start-sorted final transcript, so a cursor taken mid-transition may repeat or skip segments — re-read from after=0 if the sequence looks wrong. ${TRANSCRIPTION_WARNING}`,
+      description: `Get one transcription status and the segments transcribed since a previous call. The "after" cursor is a count over the current version. For live sessions (and live redos) segments arrive in completion order while the final transcript is sorted by start time, so when the session ends a cursor taken before may repeat or skip a few segments — once status is final, re-read from after=0 (or use get_transcription). ${TRANSCRIPTION_WARNING}`,
       inputSchema: z.object({
         id: z.uuid(),
         after: z.number().int().min(0).optional()
@@ -99,6 +100,9 @@ export function registerActivityTools(
     },
     (args, extra) =>
       runTool(ctx, 'transcribe_file', undefined, async () => {
+        // Chaves e configuração antes de abrir o app (spec §9.8): com "transcrever" desligado ou
+        // o onboarding pendente, o app nem é aberto à toa.
+        assertCanTranscribe(await ctx.readSettings())
         const path = await validateMediaPath(args.path)
         const outcome = await bridge.transcribe(path, ctx.clientName(), false)
         if (args.wait !== true) {
@@ -109,6 +113,19 @@ export function registerActivityTools(
         return { result, id: outcome.id }
       })
   )
+}
+
+/** "Permitir que IAs transcrevam" ligada e modelo escolhido (spec §8 / §13). */
+function assertCanTranscribe(settings: Settings): void {
+  if (!settings.mcp.allowTranscribe) {
+    throw new AppError(
+      'TRANSCRIBE_DISABLED',
+      'Transcribing via AI is turned off in Whisper Transcriber settings.'
+    )
+  }
+  if (settings.model === null) {
+    throw new AppError('SETUP_INCOMPLETE', 'Finish Whisper Transcriber setup and try again.')
+  }
 }
 
 /** Caminho absoluto, com extensão de mídia e arquivo legível (spec §9.8 / §14). */

@@ -12,7 +12,7 @@ import { createMcpServer, type BridgePort } from '../../../src/main/mcp/server'
 import { TRANSCRIPTION_WARNING } from '../../../src/main/mcp/tools-read'
 import { AppError } from '../../../src/shared/errors'
 import { clientDisplayName, type ActivitySnapshot, type JobProgress } from '../../../src/shared/mcp'
-import { DEFAULT_SETTINGS } from '../../../src/shared/settings'
+import { DEFAULT_SETTINGS, type Settings } from '../../../src/shared/settings'
 import { makeTempDir } from '../../helpers/tmp'
 
 const LABELS = { voce: 'Você', outros: 'Outros' }
@@ -74,6 +74,7 @@ interface StartOptions {
   now?: () => number
   sleep?: (ms: number) => Promise<void>
   clientName?: string
+  settings?: Partial<Settings>
 }
 
 type Configure = (store: HistoryStore) => Promise<{ bridge: BridgePort } & StartOptions>
@@ -83,14 +84,15 @@ async function open(configure: Configure): Promise<TestContext> {
   const activityDir = await makeTempDir()
   const store = new HistoryStore(root)
   const library = new TranscriptLibrary(store, LABELS)
-  const { bridge, now, sleep, clientName } = await configure(store)
+  const { bridge, now, sleep, clientName, settings } = await configure(store)
   const server = createMcpServer({
     library,
     activity: new ActivityLog(join(activityDir, 'activity.jsonl')),
     readSettings: async () => ({
       ...DEFAULT_SETTINGS,
       model: 'small',
-      mcp: { enabled: true, allowTranscribe: true }
+      mcp: { enabled: true, allowTranscribe: true },
+      ...settings
     }),
     bridge,
     version: '9.9.9',
@@ -409,6 +411,25 @@ describe('get_status', () => {
 })
 
 describe('transcribe_file', () => {
+  it.each([
+    [
+      'transcrever desligado',
+      { mcp: { enabled: true, allowTranscribe: false } },
+      'TRANSCRIBE_DISABLED'
+    ],
+    ['onboarding pendente', { model: null }, 'SETUP_INCOMPLETE']
+  ] as const)('%s: recusa sem chamar a ponte (não abre o app)', async (_name, settings, code) => {
+    const transcribe = vi.fn()
+    const ctx = await tracked(async () => ({
+      settings,
+      bridge: fakeBridge({ transcribe })
+    }))
+    const result = await call(ctx, 'transcribe_file', { path: await mediaFile() })
+    expect(result.isError).toBe(true)
+    expect(textOf(result)).toContain(code)
+    expect(transcribe).not.toHaveBeenCalled()
+  })
+
   it('returns queued and position without waiting', async () => {
     const ctx = await tracked(async () => ({ bridge: fakeBridge() }))
     const result = await call(ctx, 'transcribe_file', { path: await mediaFile() })
