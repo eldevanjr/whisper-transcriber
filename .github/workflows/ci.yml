@@ -185,6 +185,9 @@ jobs:
           cache: pnpm
           cache-dependency-path: app/pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
+      # O e2e do MCP confere que a janela do app apareceu via xdotool; o runner não traz.
+      - name: Instala o xdotool (verificação da janela no e2e)
+        run: sudo apt-get update && sudo apt-get install -y xdotool
       # Ubuntu 24 não dá SUID ao chrome-sandbox: o app roda com --no-sandbox só no teste.
       - run: xvfb-run --auto-servernum pnpm e2e
       - uses: actions/upload-artifact@v7

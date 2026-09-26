@@ -64,8 +64,9 @@ Ela **não** apaga, renomeia, edita nem cancela nada, e não inicia sessão ao v
 1. Abra **Configurações → IAs (MCP)** (ou o botão **Conectar IAs** na barra de cima).
 2. Ligue **Permitir que IAs leiam minhas transcrições** (e, se quiser, **Permitir que IAs
    transcrevam arquivos**, ligada por padrão).
-3. No cartão da IA (Claude Code, Codex, OpenCode, Cursor, VS Code, Gemini CLI, Windsurf), clique
-   em **Conectar**. Quem pede reinício mostra o aviso; o resto já vale nas próximas sessões.
+3. No cartão da IA (Claude Code, Claude Desktop, Codex, OpenCode, Cursor, VS Code, Gemini CLI,
+   Windsurf), clique em **Conectar**. Quem pede reinício mostra o aviso; o resto já vale nas
+   próximas sessões.
 
 O botão **Testar conexão** roda o próprio lançador como um cliente MCP e confirma as 8 ferramentas.
 

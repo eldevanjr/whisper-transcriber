@@ -1,4 +1,6 @@
 import { randomUUID } from 'node:crypto'
+import { rmSync } from 'node:fs'
+import { dirname } from 'node:path'
 import { expect, test } from '@playwright/test'
 import type { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import {
@@ -148,6 +150,7 @@ test('app fechado: a leitura funciona e transcrever abre a janela e enfileira', 
 test('acesso desligado: todas as ferramentas devolvem MCP_DISABLED', async () => {
   const userData = makeUserData(DISABLED)
   const mcp = await connectMcp(userData)
+  const media = slowMediaFile()
   try {
     const id = randomUUID()
     const calls: [string, Record<string, unknown>][] = [
@@ -158,7 +161,7 @@ test('acesso desligado: todas as ferramentas devolvem MCP_DISABLED', async () =>
       ['export_transcription', { id }],
       ['get_activity', {}],
       ['get_status', { id }],
-      ['transcribe_file', { path: slowMediaFile() }]
+      ['transcribe_file', { path: media }]
     ]
     for (const [name, args] of calls) {
       const result = await call(mcp.client, name, args)
@@ -168,5 +171,6 @@ test('acesso desligado: todas as ferramentas devolvem MCP_DISABLED', async () =>
     }
   } finally {
     await mcp.close()
+    rmSync(dirname(media), { recursive: true, force: true })
   }
 })
