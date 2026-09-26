@@ -27,14 +27,21 @@ export type ReadVersion = 'active' | 'live' | 'redo'
 export type AudioTrack = 'mix' | 'voce' | 'outros' | 'source'
 export type ExportFormat = 'txt' | 'timestamped' | 'json'
 
-export interface ListFilter {
-  query?: string
+export interface ItemFilter {
   kind?: 'file' | 'live'
-  status?: JobStatus
   since?: string
   until?: string
+}
+
+export interface ListFilter extends ItemFilter {
+  query?: string
+  status?: JobStatus
   limit?: number
   offset?: number
+}
+
+export interface SearchFilter extends ItemFilter {
+  limit?: number
 }
 
 export interface ListedTranscription {
@@ -114,13 +121,17 @@ export class TranscriptLibrary {
     return { items, total: matched.length }
   }
 
-  async search(query: string, limit = LIST_DEFAULT): Promise<SearchHit[]> {
+  async search(query: string, filter: SearchFilter = {}): Promise<SearchHit[]> {
+    if (query.length < 2 || query.length > 200) {
+      throw new AppError('INVALID_REQUEST', 'A busca precisa ter de 2 a 200 caracteres')
+    }
     const needle = fold(query).text
     if (needle === '') return []
-    const max = clamp(limit, 1, LIMIT_MAX)
+    const max = clamp(filter.limit ?? LIST_DEFAULT, 1, LIMIT_MAX)
     const { entries } = await this.history.list()
     const hits: SearchHit[] = []
     for (const meta of entries) {
+      if (!matchesItem(meta, filter)) continue
       const transcript = sortByStart(await this.history.readActive(meta))
       collectHits(meta, transcript, needle, hits)
       if (hits.length >= max) break
@@ -247,16 +258,15 @@ export class TranscriptLibrary {
 
 /** Filtros combinados de `list` (spec §9.1); `query` ignora maiúsculas e acentos. */
 function matchesFilter(meta: HistoryMeta, filter: ListFilter): boolean {
-  return (
-    matchesKind(meta, filter) &&
-    matchesStatus(meta, filter) &&
-    matchesQuery(meta, filter) &&
-    matchesSince(meta, filter) &&
-    matchesUntil(meta, filter)
-  )
+  return matchesItem(meta, filter) && matchesStatus(meta, filter) && matchesQuery(meta, filter)
 }
 
-function matchesKind(meta: HistoryMeta, filter: ListFilter): boolean {
+/** Filtros comuns a `list` e `search` (spec §9.1/§9.2): faixa de datas e tipo de item. */
+function matchesItem(meta: HistoryMeta, filter: ItemFilter): boolean {
+  return matchesKind(meta, filter) && matchesSince(meta, filter) && matchesUntil(meta, filter)
+}
+
+function matchesKind(meta: HistoryMeta, filter: ItemFilter): boolean {
   return filter.kind === undefined || meta.kind === filter.kind
 }
 
@@ -268,11 +278,11 @@ function matchesQuery(meta: HistoryMeta, filter: ListFilter): boolean {
   return filter.query === undefined || fold(meta.fileName).text.includes(fold(filter.query).text)
 }
 
-function matchesSince(meta: HistoryMeta, filter: ListFilter): boolean {
+function matchesSince(meta: HistoryMeta, filter: ItemFilter): boolean {
   return filter.since === undefined || Date.parse(meta.createdAt) >= Date.parse(filter.since)
 }
 
-function matchesUntil(meta: HistoryMeta, filter: ListFilter): boolean {
+function matchesUntil(meta: HistoryMeta, filter: ItemFilter): boolean {
   return filter.until === undefined || Date.parse(meta.createdAt) <= Date.parse(filter.until)
 }
 

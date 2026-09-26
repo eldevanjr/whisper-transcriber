@@ -199,7 +199,7 @@ describe('TranscriptLibrary.search', () => {
     await doneItem(store, '/v/com.mp4', ['alvo um', 'alvo dois', 'alvo tres'])
     await doneItem(store, '/v/sem.mp4', ['nada aqui'])
     expect(await library.search('alvo')).toHaveLength(3)
-    expect(await library.search('alvo', 2)).toHaveLength(2)
+    expect(await library.search('alvo', { limit: 2 })).toHaveLength(2)
   })
 
   it('ordena por item mais novo e, dentro do item, por tempo', async () => {
@@ -236,8 +236,46 @@ describe('TranscriptLibrary.search', () => {
     })
   })
 
-  it('query vazia não devolve nada', async () => {
-    expect(await ctx.library.search('')).toEqual([])
+  it('query fora de 2–200 caracteres → INVALID_REQUEST', async () => {
+    await expect(ctx.library.search('')).rejects.toSatisfy(isCode('INVALID_REQUEST'))
+    await expect(ctx.library.search('a')).rejects.toSatisfy(isCode('INVALID_REQUEST'))
+    await expect(ctx.library.search('x'.repeat(201))).rejects.toSatisfy(isCode('INVALID_REQUEST'))
+  })
+
+  it('query que só tem sinais combinantes não casa nada', async () => {
+    expect(await ctx.library.search('\u0301\u0301')).toEqual([])
+  })
+
+  it('filtra por kind e por createdAt', async () => {
+    const { store, library } = ctx
+    const a = await doneItem(store, '/v/a.mp4', ['alvo arquivo'])
+    const b = await liveItem(store, 'live', [
+      { start: 0, end: 1, text: 'alvo ao vivo', speaker: 'voce' }
+    ])
+    const c = await doneItem(store, '/v/c.mp4', ['alvo depois'])
+
+    expect((await library.search('alvo', { kind: 'file' })).map((hit) => hit.id)).toEqual([
+      c.id,
+      a.id
+    ])
+    expect((await library.search('alvo', { kind: 'live' })).map((hit) => hit.id)).toEqual([b.id])
+
+    const ranged = await library.search('alvo', {
+      since: '2026-09-23T10:00:02.000Z',
+      until: '2026-09-23T10:00:02.000Z'
+    })
+    expect(ranged.map((hit) => hit.id)).toEqual([c.id])
+  })
+
+  it('combina busca sem acentos com o filtro de kind', async () => {
+    const { store, library } = ctx
+    await doneItem(store, '/v/a.mp4', ['Reunião de equipe'])
+    const live = await liveItem(store, 'live', [
+      { start: 0, end: 1, text: 'Reunião ao vivo', speaker: 'voce' }
+    ])
+    expect((await library.search('REUNIAO', { kind: 'live' })).map((hit) => hit.id)).toEqual([
+      live.id
+    ])
   })
 })
 
