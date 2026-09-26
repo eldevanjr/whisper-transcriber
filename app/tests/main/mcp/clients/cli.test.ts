@@ -216,6 +216,25 @@ describe('defaultExecFile / defaultFileExists', () => {
     ).rejects.toMatchObject({ stderr: expect.any(String) as string })
   })
 
+  it('estoura o limite de tempo, mata o processo e anexa a saída', async () => {
+    await expect(
+      defaultExecFile(
+        process.execPath,
+        ['-e', 'process.stdout.write("parcial"); setTimeout(() => {}, 10000)'],
+        { timeout: 500 }
+      )
+    ).rejects.toMatchObject({
+      message: 'Command timed out after 500 ms',
+      stdout: 'parcial'
+    })
+  })
+
+  it('rejeita quando o executável não existe', async () => {
+    await expect(
+      defaultExecFile(join(root, 'nao-existe'), [], { timeout: 5000 })
+    ).rejects.toMatchObject({ stdout: '', stderr: '' })
+  })
+
   it('reconhece arquivo existente e ausente', async () => {
     const path = join(root, 'arquivo')
     await writeFile(path, 'x', 'utf8')

@@ -1,4 +1,4 @@
-import { execFile as nodeExecFile } from 'node:child_process'
+import crossSpawn from 'cross-spawn'
 import { stat } from 'node:fs/promises'
 import { posix, win32 } from 'node:path'
 import { AppError } from '../../../shared/errors'
@@ -82,17 +82,36 @@ export function createCli(deps: CliDeps): Cli {
   }
 }
 
+/**
+ * Executa sem shell e com limite. No Windows, `code`, `claude` e `codex` costumam ser atalhos
+ * `.cmd` (npm), que o Node recusa sem shell (EINVAL, CVE-2024-27980): o `cross-spawn` roda esses
+ * atalhos pelo `cmd.exe` com os argumentos escapados; nos demais casos é um spawn comum.
+ */
 export const defaultExecFile: ExecFileFn = (file, args, options) =>
   new Promise((resolve, reject) => {
-    nodeExecFile(
-      file,
-      [...args],
-      { timeout: options.timeout, encoding: 'utf8', windowsHide: true },
-      (error, stdout, stderr) => {
-        if (error) reject(Object.assign(new Error(error.message), { stdout, stderr }))
-        else resolve({ stdout, stderr })
-      }
-    )
+    const child = crossSpawn(file, [...args], { windowsHide: true })
+    let stdout = ''
+    let stderr = ''
+    let settled = false
+    const finish = (error: Error | null): void => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      if (error) reject(Object.assign(error, { stdout, stderr }))
+      else resolve({ stdout, stderr })
+    }
+    const timer = setTimeout(() => {
+      child.kill()
+      finish(new Error(`Command timed out after ${options.timeout} ms`))
+    }, options.timeout)
+    child.stdout?.setEncoding('utf8').on('data', (chunk: string) => (stdout += chunk))
+    child.stderr?.setEncoding('utf8').on('data', (chunk: string) => (stderr += chunk))
+    child.on('error', (error) => {
+      finish(error)
+    })
+    child.on('close', (code) => {
+      finish(code === 0 ? null : new Error(`Command failed with exit code ${String(code)}`))
+    })
   })
 
 export async function defaultFileExists(path: string): Promise<boolean> {
