@@ -49,7 +49,7 @@ export interface Notice {
 }
 
 export type SettingsSection =
-  'general' | 'transcription' | 'live' | 'storage' | 'help' | 'about' | 'licenses'
+  'general' | 'transcription' | 'live' | 'ai' | 'storage' | 'help' | 'about' | 'licenses'
 
 export interface LiveBubble {
   track: Track

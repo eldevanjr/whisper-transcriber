@@ -20,9 +20,14 @@ export function writeJsonAtomic(path: string, data: unknown): Promise<void> {
 }
 
 async function writeNow(path: string, data: unknown): Promise<void> {
+  await writeFileAtomic(path, `${JSON.stringify(data, null, 2)}\n`)
+}
+
+/** Grava texto via arquivo temporário + rename, sem passar pelo parser de JSON. */
+export async function writeFileAtomic(path: string, content: string): Promise<void> {
   await mkdir(dirname(path), { recursive: true })
   const temporary = `${path}.${randomUUID()}.tmp`
-  await writeFile(temporary, `${JSON.stringify(data, null, 2)}\n`, 'utf8')
+  await writeFile(temporary, content, 'utf8')
   await rename(temporary, path)
 }
 

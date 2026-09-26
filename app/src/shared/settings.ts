@@ -21,6 +21,13 @@ export const DEFAULT_LIVE_SETTINGS: LiveSettings = {
   pauseS: 1.0
 }
 
+export const McpSettingsSchema = z.object({
+  enabled: z.boolean(), // "Permitir que IAs leiam minhas transcrições"
+  allowTranscribe: z.boolean() // "Permitir que IAs transcrevam arquivos"
+})
+export type McpSettings = z.infer<typeof McpSettingsSchema>
+export const DEFAULT_MCP_SETTINGS: McpSettings = { enabled: false, allowTranscribe: true }
+
 export const SettingsSchema = z.object({
   version: z.literal(1),
   uiLanguage: z.enum(UI_LANGUAGES).nullable(), // null = seguir o idioma do sistema
@@ -31,7 +38,9 @@ export const SettingsSchema = z.object({
   checkUpdates: z.boolean(),
   nvidiaTermsAccepted: z.boolean(),
   // Configurações de antes do ao vivo não têm "live": entram com o padrão.
-  live: LiveSettingsSchema.default(DEFAULT_LIVE_SETTINGS)
+  live: LiveSettingsSchema.default(DEFAULT_LIVE_SETTINGS),
+  // Configurações de antes do MCP não têm "mcp": entram com o padrão.
+  mcp: McpSettingsSchema.default(DEFAULT_MCP_SETTINGS)
 })
 export type Settings = z.infer<typeof SettingsSchema>
 
@@ -47,5 +56,6 @@ export const DEFAULT_SETTINGS: Settings = {
   device: 'cpu',
   checkUpdates: true,
   nvidiaTermsAccepted: false,
-  live: DEFAULT_LIVE_SETTINGS
+  live: DEFAULT_LIVE_SETTINGS,
+  mcp: DEFAULT_MCP_SETTINGS
 }

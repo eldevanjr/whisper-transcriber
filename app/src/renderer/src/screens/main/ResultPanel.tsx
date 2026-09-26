@@ -12,6 +12,7 @@ import {
 } from '../../../../shared/format'
 import type { HistoryMeta, TranscriptEntry } from '../../../../shared/history'
 import type { HistoryDetail, TranscriptVersion } from '../../../../shared/ipc'
+import { clientDisplayName } from '../../../../shared/mcp'
 import { Button } from '../../components/Button'
 import { Segmented } from '../../components/Segmented'
 import { Tabs } from '../../components/Tabs'
@@ -147,6 +148,16 @@ function LiveVersion({ meta, detail }: { meta: HistoryMeta; detail: HistoryDetai
   )
 }
 
+function RequestedBy({ id }: { id?: string }) {
+  const { t } = useTranslation()
+  if (id === undefined) return null
+  return (
+    <span className="text-xs whitespace-nowrap text-muted">
+      {t('common.viaClient', { client: clientDisplayName(id) })}
+    </span>
+  )
+}
+
 function Toolbar(props: {
   empty: boolean
   redo: boolean
@@ -192,14 +203,17 @@ export function ResultPanel({ meta, detail }: { meta: HistoryMeta; detail: Histo
   const retry = () => void actionsQueue.retry(meta.id)
 
   const actions = (
-    <Toolbar
-      empty={empty}
-      redo={redo}
-      onCopy={() => void copy(content())}
-      copied={copied}
-      onDownload={() => void download(tab, content())}
-      onRetry={retry}
-    />
+    <div className="flex items-center gap-2">
+      <RequestedBy id={meta.requestedBy} />
+      <Toolbar
+        empty={empty}
+        redo={redo}
+        onCopy={() => void copy(content())}
+        copied={copied}
+        onDownload={() => void download(tab, content())}
+        onRetry={retry}
+      />
+    </div>
   )
 
   return (

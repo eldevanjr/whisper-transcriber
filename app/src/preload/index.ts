@@ -88,7 +88,12 @@ export const api: TranscriberApi = {
       ipcRenderer.send(SEND.liveAudio, { track, seq, pcm })
     },
     onEvent: (callback) => subscribe(EVENTS.live, callback)
-  }
+  },
+  mcpStatus: () => invoke(IPC.mcpStatus),
+  mcpConnect: (id) => invoke(IPC.mcpConnect, id),
+  mcpDisconnect: (id) => invoke(IPC.mcpDisconnect, id),
+  mcpTest: () => invoke(IPC.mcpTest),
+  mcpActivity: () => invoke(IPC.mcpActivity)
 }
 
 contextBridge.exposeInMainWorld('transcriber', api)

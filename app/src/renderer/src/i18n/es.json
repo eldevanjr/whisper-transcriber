@@ -14,7 +14,8 @@
     "remove": "Quitar",
     "retry": "Reintentar",
     "search": "Buscar",
-    "dismiss": "Descartar aviso"
+    "dismiss": "Descartar aviso",
+    "viaClient": "vía {{client}}"
   },
   "errors": {
     "INVALID_MESSAGE": "El motor recibió una solicitud no válida.",
@@ -53,7 +54,14 @@
     "LIVE_NOT_STARTED": "No hay ninguna sesión en vivo en curso.",
     "LIVE_ACTIVE": "Ya hay una transcripción en vivo en curso.",
     "QUEUE_BUSY": "Espera a que termine la cola (o cancela el archivo actual) para empezar en vivo.",
-    "MIC_DENIED": "Se denegó el acceso al micrófono."
+    "MIC_DENIED": "Se denegó el acceso al micrófono.",
+    "MCP_DISABLED": "El acceso de IA está desactivado en Whisper Transcriber (Configuración → Asistentes de IA).",
+    "TRANSCRIBE_DISABLED": "La transcripción por IA está desactivada en la configuración de Whisper Transcriber.",
+    "APP_START_TIMEOUT": "Whisper Transcriber no se inició a tiempo.",
+    "SETUP_INCOMPLETE": "Completa la configuración inicial de Whisper Transcriber e inténtalo de nuevo.",
+    "CONFIG_INVALID": "El archivo de configuración de la IA tiene un error; usa la configuración manual.",
+    "CONFIG_HAS_COMMENTS": "El archivo de la IA tiene comentarios; para no perderlos, usa la configuración manual.",
+    "CLIENT_CLI_FAILED": "El comando de la IA falló."
   },
   "notices": {
     "cudaFallback": "La GPU falló; esta transcripción siguió en la CPU.",
@@ -140,6 +148,7 @@
     },
     "drop": "Suelta para transcribir",
     "settings": "Configuración",
+    "connectAi": "Conectar IAs",
     "cancel": "Cancelar transcripción",
     "cancelTitle": "¿Cancelar la transcripción?",
     "cancelMessage": "Lo transcrito de este archivo hasta ahora se descartará.",
@@ -195,6 +204,7 @@
       "general": "General",
       "transcription": "Transcripción",
       "live": "En vivo",
+      "ai": "IAs (MCP)",
       "storage": "Almacenamiento",
       "help": "Ayuda",
       "about": "Acerca de",
@@ -274,6 +284,72 @@
       "count": "{{count}} componentes",
       "backToList": "Volver a la lista",
       "openPage": "Abrir página del proyecto"
+    },
+    "ai": {
+      "intro": "Deja que los asistentes de IA de tu computadora lean tus transcripciones y pidan nuevas. Nada sale de tu computadora.",
+      "access": {
+        "title": "Acceso de IAs",
+        "enabled": "Permitir que las IAs lean mis transcripciones",
+        "transcribe": "Permitir que las IAs transcriban archivos",
+        "ready": "Listo · {{count}} IAs conectadas",
+        "off": "Apagado",
+        "problem": "Con problema: {{reason}}",
+        "test": "Probar conexión",
+        "testing": "Probando…",
+        "testOk": "Funcionando ({{count}} herramientas)",
+        "testError": "Falló: {{message}}"
+      },
+      "clients": {
+        "title": "IAs en esta computadora",
+        "missing": "No encontrado",
+        "found": "Encontrado",
+        "connected": "Conectado",
+        "used": "usado {{time}}",
+        "restart": "reinicia {{name}} para usarlo",
+        "connect": "Conectar",
+        "connecting": "Conectando…",
+        "disconnect": "Desconectar",
+        "disconnecting": "Desconectando…",
+        "manual": "Configuración manual",
+        "copy": "Copiar",
+        "copied": "✓ Copiado",
+        "configInvalid": "El archivo de configuración de {{name}} tiene un error; usa la configuración manual.",
+        "configHasComments": "El archivo de {{name}} tiene comentarios; para no perderlos, usa la configuración manual."
+      },
+      "confirm": {
+        "title": "¿Permitir el acceso?",
+        "message": "¿Permitir que las IAs lean tus transcripciones? Puedes desactivarlo cuando quieras.",
+        "confirm": "Permitir y conectar",
+        "cancel": "Cancelar"
+      },
+      "other": {
+        "title": "Otra IA",
+        "description": "Cualquier app compatible con MCP (stdio) funciona con este comando:",
+        "command": "Comando",
+        "json": "JSON genérico (mcpServers)",
+        "copyCommand": "Copiar comando",
+        "copyJson": "Copiar JSON"
+      },
+      "web": {
+        "title": "ChatGPT y claude.ai (web)",
+        "description": "Estos asistentes funcionan en la nube y solo pueden conectarse a servidores publicados en internet. Para mantener tus transcripciones en tu computadora, no son compatibles."
+      },
+      "activity": {
+        "title": "Actividad reciente",
+        "empty": "Ninguna IA lo ha usado todavía.",
+        "line": "{{client}} · {{tool}} · {{time}}",
+        "lineWithTitle": "{{client}} · {{tool}} “{{title}}” · {{time}}",
+        "tools": {
+          "list_transcriptions": "listó las transcripciones",
+          "search_transcriptions": "buscó en las transcripciones",
+          "get_transcription": "leyó una transcripción",
+          "get_audio": "tomó un audio",
+          "export_transcription": "exportó una transcripción",
+          "get_activity": "vio la actividad",
+          "get_status": "siguió una transcripción",
+          "transcribe_file": "pidió una transcripción"
+        }
+      }
     }
   },
   "help": {
@@ -318,8 +394,6 @@
     "defaultMic": "Predeterminado del sistema",
     "unnamedMic": "Micrófono {{n}}",
     "level": "Nivel: {{name}}",
-    "you": "Tú",
-    "others": "Otros",
     "systemAudio": "Audio del equipo (Otros)",
     "systemAudioHint": "Lo que suena en el equipo, como las voces de la llamada.",
     "systemUnavailable": "No disponible en este sistema.",

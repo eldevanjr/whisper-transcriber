@@ -12,9 +12,18 @@ import type {
   AppInfo,
   HistoryDetail,
   LiveCapabilities,
+  McpStatus,
+  McpTestResult,
   MonitorVolume,
   TranscriberApi
 } from '../../src/shared/ipc'
+import {
+  MCP_CLIENT_NAMES,
+  type ClientState,
+  type ClientStatus,
+  type McpActivityLine,
+  type McpClientId
+} from '../../src/shared/mcp'
 import type { ModelId } from '../../src/shared/models'
 import { DEFAULT_SETTINGS, type Settings } from '../../src/shared/settings'
 
@@ -225,6 +234,39 @@ export class FakeApi implements TranscriberApi {
   }
 
   app = { info: vi.fn(() => Promise.resolve(APP_INFO)) }
+
+  mcpStatus = vi.fn((): Promise<McpStatus> =>
+    Promise.resolve({
+      launcherOk: true,
+      launcherError: null,
+      launcherPath: '/home/u/.config/Whisper Transcriber/mcp/whisper-transcriber-mcp',
+      bridgeOk: true,
+      clients: []
+    })
+  )
+
+  mcpConnect = vi.fn((id: McpClientId): Promise<ClientStatus> =>
+    Promise.resolve(makeClientStatus(id, 'connected'))
+  )
+
+  mcpDisconnect = vi.fn((id: McpClientId): Promise<ClientStatus> =>
+    Promise.resolve(makeClientStatus(id, 'found'))
+  )
+
+  mcpTest = vi.fn((): Promise<McpTestResult> => Promise.resolve({ ok: true, tools: 8 }))
+
+  mcpActivity = vi.fn((): Promise<McpActivityLine[]> => Promise.resolve([]))
+}
+
+export function makeClientStatus(id: McpClientId, state: ClientState): ClientStatus {
+  return {
+    id,
+    name: MCP_CLIENT_NAMES[id],
+    state,
+    lastUsedAt: null,
+    restartNeeded: false,
+    manual: { kind: 'json', text: `{ "${id}": "config manual" }` }
+  }
 }
 
 function subscribe<T>(listeners: Set<Listener<T>>, callback: Listener<T>): () => void {
