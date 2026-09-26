@@ -220,7 +220,11 @@
         "dark": "Oscuro"
       },
       "updates": "Buscar nuevas versiones",
-      "updatesHint": "Avisa cuando sale una versión nueva."
+      "updatesHint": "Avisa cuando sale una versión nueva.",
+      "closeToTray": "Al cerrar la ventana, seguir en la bandeja",
+      "closeToTrayHint": "El icono de la bandeja permite grabar y abrir la app. En GNOME necesita la extensión AppIndicator (incluida en Ubuntu).",
+      "openAtLogin": "Abrir al iniciar sesión",
+      "openAtLoginHint": "Se abre oculta en la bandeja, con el atajo listo."
     },
     "models": {
       "title": "Modelo",
@@ -297,7 +301,9 @@
         "test": "Probar conexión",
         "testing": "Probando…",
         "testOk": "Funcionando ({{count}} herramientas)",
-        "testError": "Falló: {{message}}"
+        "testError": "Falló: {{message}}",
+        "notify": "Avisar cuando una IA pida una transcripción",
+        "notifyHint": "Notificación del sistema al pedirla y cuando termina; el icono de la bandeja muestra un punto azul hasta que abras la app."
       },
       "clients": {
         "title": "IAs en esta computadora",
@@ -434,6 +440,49 @@
     "reconnect": "Reconectar",
     "permission": "Abrir los permisos del sistema",
     "retry": "Intentar de nuevo",
-    "defaultTitle": "Reunión {{date}}"
+    "defaultTitle": "Reunión {{date}}",
+    "shortcut": "Atajo para empezar/detener",
+    "shortcutHint": "Funciona incluso con la ventana cerrada.",
+    "shortcutRecord": "Grabar atajo: {{current}}",
+    "shortcutRecording": "Pulsa la combinación…",
+    "shortcutDefault": "Restaurar predeterminado",
+    "shortcutOff": "Desactivar",
+    "shortcutNone": "Desactivado",
+    "shortcutTaken": "Otro programa ya usa esta combinación. Elige otra.",
+    "shortcutUnavailable": "El sistema no permitió el atajo. El icono de la bandeja sigue funcionando.",
+    "shortcutNeedsModifier": "Usa Ctrl, Alt o Super junto con una letra, número o F1–F24."
+  },
+  "background": {
+    "tooltip": "Whisper Transcriber",
+    "tooltipRecording": "Grabando — {{time}}",
+    "tooltipPaused": "En pausa — {{time}}",
+    "statusRecording": "● Grabando",
+    "statusPaused": "● En pausa",
+    "start": "Empezar a grabar",
+    "stop": "Detener grabación",
+    "pause": "Pausar",
+    "resume": "Reanudar",
+    "open": "Abrir Whisper Transcriber",
+    "finishSetup": "Termina la configuración",
+    "quit": "Salir",
+    "withShortcut": "{{label}} ({{shortcut}})",
+    "started": "Grabando",
+    "tracksBoth": "Tú + Otros",
+    "tracksMic": "Solo tú",
+    "saved": "Reunión guardada",
+    "savedBody": "{{title}} — {{minutes}} min",
+    "failed": "La grabación terminó con un error",
+    "startFailed": "No se pudo empezar a grabar",
+    "setupFirst": "Termina la configuración de la app para grabar.",
+    "deviceLost": "Micrófono desconectado",
+    "deviceLostBody": "Grabación en pausa.",
+    "hiddenTitle": "Sigue en la bandeja",
+    "hiddenBody": "Usa {{shortcut}} para grabar. Para salir, usa el icono de la bandeja.",
+    "hiddenBodyNoShortcut": "Para grabar o salir, usa el icono de la bandeja.",
+    "recording": "Grabando",
+    "aiRequested": "{{client}} pidió una transcripción",
+    "aiDone": "Transcripción lista ({{client}})",
+    "aiFailed": "La transcripción falló ({{client}})",
+    "aiFailedBody": "{{title}}: {{reason}}"
   }
 }

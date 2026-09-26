@@ -10,6 +10,7 @@ import { Toggle } from '../../components/Toggle'
 import { useCopy } from '../../hooks/useCopy'
 import { useMcpStatus, type McpTestState } from '../../hooks/useMcpStatus'
 import { useSaveSettings } from '../../hooks/useSaveSettings'
+import { useSaveTray, useTraySettings } from '../../hooks/useSaveTray'
 import { useAppStore } from '../../providers'
 import { ClientCard } from './ai/ClientCard'
 import { RecentActivity } from './ai/RecentActivity'
@@ -84,6 +85,8 @@ export function AiSection({ now = Date.now }: { now?: () => number } = {}) {
   const { t } = useTranslation()
   const settings = useAppStore((s) => s.settings)
   const save = useSaveSettings()
+  const tray = useTraySettings()
+  const saveTray = useSaveTray()
   const mcp = useMcpStatus()
   const [pending, setPending] = useState<McpClientId | null>(null)
   if (!settings) return null
@@ -121,6 +124,13 @@ export function AiSection({ now = Date.now }: { now?: () => number } = {}) {
           checked={settings.mcp.allowTranscribe}
           disabled={!enabled}
           onChange={(value) => void save({ mcp: { ...settings.mcp, allowTranscribe: value } })}
+        />
+        <Toggle
+          label={t('settings.ai.access.notify')}
+          description={t('settings.ai.access.notifyHint')}
+          checked={tray.notifyAi}
+          disabled={!enabled}
+          onChange={(notifyAi) => void saveTray({ notifyAi })}
         />
         <p className="text-sm">{status}</p>
         <div className="flex items-center gap-3">

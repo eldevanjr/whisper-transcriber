@@ -5,6 +5,7 @@ import type { i18n } from 'i18next'
 import type { ReactNode } from 'react'
 import { expect } from 'vitest'
 import { createI18n, type UiLanguage } from '../../src/renderer/src/i18n'
+import { LiveCaptureProvider } from '../../src/renderer/src/live/LiveCaptureProvider'
 import { AppProviders } from '../../src/renderer/src/providers'
 import { createAppStore, type AppStore } from '../../src/renderer/src/store/app-store'
 import { FakeApi } from './fake-api'
@@ -30,7 +31,7 @@ export async function renderWithApp(
   const user = userEvent.setup()
   const wrap = (node: ReactNode) => (
     <AppProviders api={api} store={store} i18n={i18n} liveMedia={media}>
-      {node}
+      <LiveCaptureProvider>{node}</LiveCaptureProvider>
     </AppProviders>
   )
   const result = render(wrap(ui))

@@ -19,7 +19,8 @@ describe('paths', () => {
       mcpBridgeInfo: join('/u', 'mcp', 'bridge.json'),
       mcpBridgeSocket: join('/u', 'mcp', 'bridge.sock'),
       mcpActivity: join('/u', 'mcp', 'activity.jsonl'),
-      mcpSession: join('/u', 'mcp', 'session')
+      mcpSession: join('/u', 'mcp', 'session'),
+      state: join('/u', 'state.json')
     })
     expect(modelDir(paths, 'medium')).toBe(join('/u', 'models', 'medium'))
     expect(modelDir(paths, 'medium', 'ggml')).toBe(join('/u', 'models-ggml', 'medium'))

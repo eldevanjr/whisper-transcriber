@@ -1,5 +1,7 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { licenseUrls } from '../../src/shared/app-info'
+import { APP_ID, licenseUrls } from '../../src/shared/app-info'
 import licenses from '../../resources/third-party-licenses.json'
 
 describe('licenseUrls', () => {
@@ -22,4 +24,9 @@ describe('licenseUrls', () => {
     )
     expect(JSON.stringify(licenses)).not.toMatch(/\/home\/|\/Users\/|[A-Z]:\\\\/)
   })
+})
+
+it('APP_ID é o appId do electron-builder (notificações do Windows dependem disso)', () => {
+  const yml = readFileSync(join(__dirname, '../../electron-builder.yml'), 'utf8')
+  expect(yml).toContain(`appId: ${APP_ID}`)
 })

@@ -19,7 +19,7 @@ export interface AppImageIntegration {
  * Exec entre aspas: `"`, `` ` ``, `$` e `\` levam barra; depois vale o escape das strings do
  * .desktop (a barra dobra) e `%` vira `%%` (códigos de campo).
  */
-function execPath(path: string): string {
+export function desktopExec(path: string): string {
   const quoted = path.replace(/["`$\\]/g, (char) => `\\${char}`)
   return `"${quoted.replace(/\\/g, '\\\\').replace(/%/g, '%%')}"`
 }
@@ -29,7 +29,7 @@ function desktopEntry(appImage: string, icon: string): string {
     '[Desktop Entry]',
     `Name=${APP_NAME}`,
     'Comment=Transcreva vídeos e áudios localmente com Whisper',
-    `Exec=${execPath(appImage)} %U`,
+    `Exec=${desktopExec(appImage)} %U`,
     'Terminal=false',
     'Type=Application',
     `Icon=${icon}`,

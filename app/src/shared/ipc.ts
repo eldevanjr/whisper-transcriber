@@ -59,7 +59,10 @@ export const IPC = {
   mcpConnect: 'mcp:connect',
   mcpDisconnect: 'mcp:disconnect',
   mcpTest: 'mcp:test',
-  mcpActivity: 'mcp:activity'
+  mcpActivity: 'mcp:activity',
+  backgroundReport: 'background:report',
+  backgroundShortcutStatus: 'background:shortcut-status',
+  backgroundSuspendShortcut: 'background:suspend-shortcut'
 } as const
 
 export const EVENTS = {
@@ -67,7 +70,9 @@ export const EVENTS = {
   download: 'event:download',
   settings: 'event:settings',
   update: 'event:update',
-  live: 'event:live'
+  live: 'event:live',
+  backgroundCommand: 'event:background-command',
+  backgroundNavigate: 'event:background-navigate'
 } as const
 
 /** Canais sem resposta (renderer → main): os blocos de áudio do ao vivo, 10 por segundo. */
@@ -88,11 +93,25 @@ export interface MonitorVolume {
   muted: boolean
 }
 
+/** ok = registrado; taken = outro programa usa; unavailable = o sistema recusou (Wayland). */
+export type ShortcutStatus = 'ok' | 'off' | 'taken' | 'unavailable'
+
 export interface LiveStartInput {
   tracks: Track[]
   test: boolean
   title: string
 }
+
+/** Onde a janela abre ao clicar numa notificação. */
+export type NavigateTarget = { kind: 'item'; id: string } | { kind: 'live' } | { kind: 'window' }
+
+/** Do main para o renderer: a bandeja ou o atalho pediram começar/parar, pausar ou retomar. */
+export interface BackgroundCommand {
+  action: 'toggle' | 'pause' | 'resume'
+}
+
+/** Do renderer para o main: o que só ele sabe e vira notificação. */
+export type BackgroundReport = { kind: 'startFailed'; error: ErrorInfo } | { kind: 'deviceLost' }
 
 export interface HistoryDetail {
   meta: HistoryMeta
@@ -228,4 +247,13 @@ export interface TranscriberApi {
   mcpDisconnect(id: McpClientId): Promise<ClientStatus>
   mcpTest(): Promise<McpTestResult>
   mcpActivity(): Promise<McpActivityLine[]>
+  background: {
+    /** Falha ao começar pela bandeja ou microfone perdido: o main notifica. */
+    report(report: BackgroundReport): Promise<null>
+    shortcutStatus(): Promise<ShortcutStatus>
+    /** Enquanto a tela grava um atalho novo, o atual não dispara. */
+    suspendShortcut(on: boolean): Promise<null>
+    onCommand(callback: (command: BackgroundCommand) => void): Unsubscribe
+    onNavigate(callback: (target: NavigateTarget) => void): Unsubscribe
+  }
 }

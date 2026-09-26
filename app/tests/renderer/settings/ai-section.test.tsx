@@ -86,6 +86,22 @@ describe('AiSection — acesso', () => {
     })
   })
 
+  it('aviso de pedido das IAs: liga/desliga na bandeja e fica bloqueado sem acesso', async () => {
+    const api = new FakeApi({ mcp: { enabled: true, allowTranscribe: true } })
+    const { user } = await renderWithApp(<AiSection now={now} />, { api })
+    const notify = screen.getByRole('switch', { name: 'Avisar quando uma IA pedir transcrição' })
+    expect(notify).toHaveAttribute('aria-checked', 'true')
+    await user.click(notify)
+    expect(api.settings.update).toHaveBeenLastCalledWith({
+      tray: expect.objectContaining({ notifyAi: false }) as unknown
+    })
+    const off = await renderWithApp(<AiSection now={now} />)
+    const blocked = within(off.container).getByRole('switch', {
+      name: 'Avisar quando uma IA pedir transcrição'
+    })
+    expect(blocked).toBeDisabled()
+  })
+
   it('mostra Pronto com o número de conectadas, Desligado e Com problema', async () => {
     const api = new FakeApi({ mcp: { enabled: true, allowTranscribe: true } })
     api.mcpStatus.mockResolvedValue(

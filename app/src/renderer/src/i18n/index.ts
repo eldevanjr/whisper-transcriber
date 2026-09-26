@@ -1,12 +1,12 @@
 import i18next, { type i18n } from 'i18next'
 import { initReactI18next } from 'react-i18next'
-import type { UI_LANGUAGES } from '../../../shared/settings'
+import type { UiLanguage } from '../../../shared/language'
 import { speakerLabelsFor } from '../../../shared/speakers'
 import en from './en.json'
 import es from './es.json'
 import ptBR from './pt-BR.json'
 
-export type UiLanguage = (typeof UI_LANGUAGES)[number]
+export { resolveLanguage, type UiLanguage } from '../../../shared/language'
 
 /**
  * Injeta os rótulos dos falantes (fonte única em `shared/speakers.ts`) nas traduções, para
@@ -25,14 +25,6 @@ export const RESOURCES = {
   en: { translation: withSpeakerLabels(en, 'en') },
   es: { translation: withSpeakerLabels(es, 'es') }
 } as const
-
-/** Idioma escolhido nas configurações ou, sem escolha, o do sistema (pt*, es*, senão inglês). */
-export function resolveLanguage(setting: UiLanguage | null, system: string): UiLanguage {
-  if (setting !== null) return setting
-  const lower = system.toLowerCase()
-  if (lower.startsWith('pt')) return 'pt-BR'
-  return lower.startsWith('es') ? 'es' : 'en'
-}
 
 export function createI18n(language: UiLanguage): i18n {
   const instance = i18next.createInstance()

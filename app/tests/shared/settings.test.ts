@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   DEFAULT_MCP_SETTINGS,
   DEFAULT_SETTINGS,
+  DEFAULT_TRAY_SETTINGS,
   SettingsPatchSchema,
   SettingsSchema
 } from '../../src/shared/settings'
@@ -67,5 +68,28 @@ describe('settings de IAs (MCP)', () => {
       success: true,
       data: { mcp: { enabled: true, allowTranscribe: false } }
     })
+  })
+})
+
+describe('configurações da bandeja', () => {
+  it('settings sem "tray" (de antes da bandeja) recebem o padrão', () => {
+    const old: Record<string, unknown> = { ...DEFAULT_SETTINGS }
+    delete old.tray
+    expect(SettingsSchema.parse(old).tray).toEqual(DEFAULT_TRAY_SETTINGS)
+    expect(DEFAULT_TRAY_SETTINGS).toEqual({
+      closeToTray: true,
+      openAtLogin: true,
+      shortcut: 'CommandOrControl+Alt+R',
+      notifyAi: true
+    })
+  })
+
+  it('atalho: accelerator válido ou null; o resto é recusado', () => {
+    const patch = (shortcut: unknown) =>
+      SettingsPatchSchema.safeParse({ tray: { ...DEFAULT_TRAY_SETTINGS, shortcut } }).success
+    expect(patch('Alt+F9')).toBe(true)
+    expect(patch(null)).toBe(true)
+    expect(patch('Shift+R')).toBe(false)
+    expect(patch('Alt')).toBe(false)
   })
 })

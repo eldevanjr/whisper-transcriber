@@ -44,3 +44,8 @@ export function useLiveMedia(): LiveMedia {
 export function useAppStore<T>(selector: (state: AppState & AppActions) => T): T {
   return useStore(required(useContext(StoreContext), 'useAppStore'), selector)
 }
+
+/** Para quem precisa ler o estado na hora (eventos externos fora do ciclo do React). */
+export function useAppStoreApi(): AppStore {
+  return required(useContext(StoreContext), 'useAppStoreApi')
+}

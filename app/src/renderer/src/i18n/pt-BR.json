@@ -220,7 +220,11 @@
         "dark": "Escuro"
       },
       "updates": "Verificar novas versões",
-      "updatesHint": "Avisa quando sair uma versão nova."
+      "updatesHint": "Avisa quando sair uma versão nova.",
+      "closeToTray": "Ao fechar a janela, continuar na bandeja",
+      "closeToTrayHint": "O ícone na bandeja deixa gravar e abrir o app. No GNOME, ele precisa da extensão AppIndicator (já vem no Ubuntu).",
+      "openAtLogin": "Abrir ao entrar no computador",
+      "openAtLoginHint": "Abre escondido na bandeja, com o atalho pronto."
     },
     "models": {
       "title": "Modelo",
@@ -297,7 +301,9 @@
         "test": "Testar conexão",
         "testing": "Testando…",
         "testOk": "Funcionando ({{count}} ferramentas)",
-        "testError": "Falhou: {{message}}"
+        "testError": "Falhou: {{message}}",
+        "notify": "Avisar quando uma IA pedir transcrição",
+        "notifyHint": "Notificação do sistema no pedido e quando a transcrição termina; o ícone da bandeja ganha um ponto azul até você abrir o app."
       },
       "clients": {
         "title": "IAs neste computador",
@@ -434,6 +440,49 @@
     "reconnect": "Reconectar",
     "permission": "Abrir as permissões do sistema",
     "retry": "Tentar de novo",
-    "defaultTitle": "Reunião {{date}}"
+    "defaultTitle": "Reunião {{date}}",
+    "shortcut": "Atalho para começar/parar",
+    "shortcutHint": "Funciona mesmo com a janela fechada.",
+    "shortcutRecord": "Gravar atalho: {{current}}",
+    "shortcutRecording": "Pressione a combinação…",
+    "shortcutDefault": "Restaurar padrão",
+    "shortcutOff": "Desligar",
+    "shortcutNone": "Desligado",
+    "shortcutTaken": "Essa combinação já é usada por outro programa. Escolha outra.",
+    "shortcutUnavailable": "O sistema não permitiu o atalho. A bandeja continua funcionando.",
+    "shortcutNeedsModifier": "Use Ctrl, Alt ou Super junto com uma letra, número ou F1–F24."
+  },
+  "background": {
+    "tooltip": "Whisper Transcriber",
+    "tooltipRecording": "Gravando — {{time}}",
+    "tooltipPaused": "Em pausa — {{time}}",
+    "statusRecording": "● Gravando",
+    "statusPaused": "● Em pausa",
+    "start": "Começar gravação",
+    "stop": "Parar gravação",
+    "pause": "Pausar",
+    "resume": "Retomar",
+    "open": "Abrir Whisper Transcriber",
+    "finishSetup": "Termine a configuração",
+    "quit": "Sair",
+    "withShortcut": "{{label}} ({{shortcut}})",
+    "started": "Gravando",
+    "tracksBoth": "Você + Outros",
+    "tracksMic": "Só Você",
+    "saved": "Reunião salva",
+    "savedBody": "{{title}} — {{minutes}} min",
+    "failed": "A gravação terminou com erro",
+    "startFailed": "Não deu para começar a gravar",
+    "setupFirst": "Termine a configuração do app para gravar.",
+    "deviceLost": "Microfone desconectado",
+    "deviceLostBody": "Gravação em pausa.",
+    "hiddenTitle": "Continua na bandeja",
+    "hiddenBody": "Use {{shortcut}} para gravar. Para sair, use o ícone na bandeja.",
+    "hiddenBodyNoShortcut": "Para gravar ou sair, use o ícone na bandeja.",
+    "recording": "Gravando",
+    "aiRequested": "{{client}} pediu uma transcrição",
+    "aiDone": "Transcrição pronta ({{client}})",
+    "aiFailed": "A transcrição falhou ({{client}})",
+    "aiFailedBody": "{{title}}: {{reason}}"
   }
 }

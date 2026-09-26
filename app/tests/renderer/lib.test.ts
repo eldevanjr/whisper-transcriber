@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { acceleratorFromKeys } from '../../src/renderer/src/lib/accelerator'
 import { formatBytes } from '../../src/renderer/src/lib/bytes'
 import { transferRate, type Sample } from '../../src/renderer/src/lib/rate'
 
@@ -23,6 +24,49 @@ describe('transferRate', () => {
     expect(transferRate([])).toBe(0)
     expect(transferRate([s(0, 10)])).toBe(0)
     expect(transferRate([s(10, 10), s(10, 20)])).toBe(0)
+  })
+})
+
+describe('acceleratorFromKeys', () => {
+  const keys = (
+    code: string,
+    mods: Partial<Record<'ctrlKey' | 'altKey' | 'shiftKey' | 'metaKey', boolean>> = {},
+    key = 'x'
+  ) => ({
+    key,
+    code,
+    ctrlKey: false,
+    altKey: false,
+    shiftKey: false,
+    metaKey: false,
+    ...mods
+  })
+
+  it('Windows/Linux: Ctrl vira CommandOrControl, Meta vira Super', () => {
+    expect(acceleratorFromKeys(keys('KeyR', { ctrlKey: true, altKey: true }), 'linux')).toBe(
+      'CommandOrControl+Alt+R'
+    )
+    expect(acceleratorFromKeys(keys('Digit5', { metaKey: true, shiftKey: true }), 'win32')).toBe(
+      'Super+Shift+5'
+    )
+    expect(acceleratorFromKeys(keys('F9', { altKey: true }), 'linux')).toBe('Alt+F9')
+    expect(acceleratorFromKeys(keys('Space', { ctrlKey: true }), 'linux')).toBe(
+      'CommandOrControl+Space'
+    )
+  })
+
+  it('macOS: ⌘ vira CommandOrControl, ⌃ vira Control', () => {
+    expect(acceleratorFromKeys(keys('KeyR', { metaKey: true, altKey: true }), 'darwin')).toBe(
+      'CommandOrControl+Alt+R'
+    )
+    expect(acceleratorFromKeys(keys('KeyR', { ctrlKey: true }), 'darwin')).toBe('Control+R')
+  })
+
+  it('só modificador: esperando; sem modificador (ou só Shift) ou tecla estranha: inválido', () => {
+    expect(acceleratorFromKeys(keys('AltLeft', { altKey: true }, 'Alt'), 'linux')).toBe('pending')
+    expect(acceleratorFromKeys(keys('KeyR'), 'linux')).toBeNull()
+    expect(acceleratorFromKeys(keys('KeyR', { shiftKey: true }), 'linux')).toBeNull()
+    expect(acceleratorFromKeys(keys('Semicolon', { ctrlKey: true }), 'linux')).toBeNull()
   })
 })
 

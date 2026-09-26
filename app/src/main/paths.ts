@@ -16,6 +16,7 @@ export interface AppPaths {
   mcpBridgeSocket: string
   mcpActivity: string
   mcpSession: string
+  state: string
 }
 
 export function appPaths(userData: string, platform: NodeJS.Platform = process.platform): AppPaths {
@@ -36,7 +37,8 @@ export function appPaths(userData: string, platform: NodeJS.Platform = process.p
     mcpBridgeInfo: join(mcpDir, 'bridge.json'),
     mcpBridgeSocket: join(mcpDir, 'bridge.sock'),
     mcpActivity: join(mcpDir, 'activity.jsonl'),
-    mcpSession: join(mcpDir, 'session')
+    mcpSession: join(mcpDir, 'session'),
+    state: join(userData, 'state.json')
   }
 }
 

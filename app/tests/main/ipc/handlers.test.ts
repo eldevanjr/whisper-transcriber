@@ -122,6 +122,12 @@ function setup(settingsOverride: Partial<Settings> = {}) {
           { at: '2026-09-26T12:00:00.000Z', client: 'codex', tool: 'list_transcriptions' }
         ])
       )
+    },
+    background: {
+      onStarted: vi.fn(),
+      report: vi.fn(),
+      shortcutStatus: vi.fn(() => 'taken'),
+      suspendShortcut: vi.fn()
     }
   }
   const senders = new Map<string, (event: IpcEventLike, arg?: unknown) => void>()
@@ -484,5 +490,32 @@ describe('IPC das IAs (MCP)', () => {
     const { call, services } = setup()
     expect(await call(IPC.mcpDisconnect, 'codex')).toEqual(ok(clientStatus('codex', 'found')))
     expect(services.mcp.disconnect).toHaveBeenCalledWith('codex')
+  })
+})
+describe('IPC do segundo plano', () => {
+  it('começar uma sessão avisa o segundo plano (notificação e relógio)', async () => {
+    const { call, services } = setup()
+    const opts = { tracks: ['voce'], test: false, title: 'R' }
+    await call(IPC.liveStart, opts)
+    expect(services.background.onStarted).toHaveBeenCalledWith(opts)
+  })
+
+  it('relatos validados; status e suspensão do atalho', async () => {
+    const { call, services } = setup()
+    const failed = { kind: 'startFailed', error: { code: 'MIC_DENIED', message: 'negado' } }
+    expect(await call(IPC.backgroundReport, failed)).toEqual(ok(null))
+    expect(await call(IPC.backgroundReport, { kind: 'deviceLost' })).toEqual(ok(null))
+    expect(services.background.report).toHaveBeenCalledWith(failed)
+    for (const bad of [
+      { kind: 'outro' },
+      { kind: 'startFailed', error: { code: 'INEXISTENTE', message: 'x' } },
+      { kind: 'startFailed', error: { code: 'MIC_DENIED', message: 'x'.repeat(5001) } }
+    ]) {
+      expect(await call(IPC.backgroundReport, bad)).toEqual(fail('INVALID_REQUEST'))
+    }
+    expect(await call(IPC.backgroundShortcutStatus)).toEqual(ok('taken'))
+    expect(await call(IPC.backgroundSuspendShortcut, true)).toEqual(ok(null))
+    expect(services.background.suspendShortcut).toHaveBeenCalledWith(true)
+    expect(await call(IPC.backgroundSuspendShortcut, 'sim')).toEqual(fail('INVALID_REQUEST'))
   })
 })

@@ -93,7 +93,14 @@ export const api: TranscriberApi = {
   mcpConnect: (id) => invoke(IPC.mcpConnect, id),
   mcpDisconnect: (id) => invoke(IPC.mcpDisconnect, id),
   mcpTest: () => invoke(IPC.mcpTest),
-  mcpActivity: () => invoke(IPC.mcpActivity)
+  mcpActivity: () => invoke(IPC.mcpActivity),
+  background: {
+    report: (report) => invoke(IPC.backgroundReport, report),
+    shortcutStatus: () => invoke(IPC.backgroundShortcutStatus),
+    suspendShortcut: (on) => invoke(IPC.backgroundSuspendShortcut, on),
+    onCommand: (callback) => subscribe(EVENTS.backgroundCommand, callback),
+    onNavigate: (callback) => subscribe(EVENTS.backgroundNavigate, callback)
+  }
 }
 
 contextBridge.exposeInMainWorld('transcriber', api)

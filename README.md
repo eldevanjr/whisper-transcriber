@@ -9,6 +9,9 @@ e [whisper.cpp](https://github.com/ggml-org/whisper.cpp) (GPU por Vulkan ou Meta
 - Resultado em **Texto** (parágrafos), **Com tempos** e **JSON**, com Copiar e Baixar.
 - **Ao vivo** para reuniões e chamadas: transcreve o microfone ("Você") e o áudio do computador
   ("Outros") frase a frase, grava tudo e deixa refazer com o áudio completo depois.
+- **Bandeja e atalho:** fechar a janela deixa o app na bandeja; **Ctrl+Alt+R** (⌘⌥R no macOS)
+  começa e para a gravação ao vivo de qualquer lugar, com bolinha vermelha no ícone e
+  notificações do sistema. Abre com o computador (dá para desligar em Configurações → Geral).
 - Histórico com o áudio salvo; GPU NVIDIA (CUDA), AMD/Intel (Vulkan) ou Apple Silicon (Metal).
 - **IAs (MCP):** Claude Code, Codex, OpenCode e outras leem, buscam e transcrevem por você, sem
   nada sair do computador.
@@ -33,6 +36,10 @@ e [whisper.cpp](https://github.com/ggml-org/whisper.cpp) (GPU por Vulkan ou Meta
 
 - **Preparar e testar:** escolha o microfone, veja os medidores de nível e clique em **Testar**
   para ver o texto aparecer sem salvar nada.
+- **Sem abrir a janela:** o ícone na bandeja e o atalho (Configurações → Ao vivo, dá para trocar)
+  começam e param a sessão com o microfone e o áudio do computador salvos. No GNOME, o ícone precisa
+  da extensão AppIndicator (já vem no Ubuntu); no Wayland o sistema pede para liberar o atalho na
+  primeira vez.
 - **Frase a frase:** o texto sai quando há uma pausa (1,0 s por padrão, ajustável de 0,5 a 3 s
   em Configurações → Ao vivo) ou a cada 25 s de fala contínua, sem picotar palavras.
 - **Duas faixas:** o microfone ("Você") e o áudio do computador ("Outros") são transcritos

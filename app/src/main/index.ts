@@ -9,20 +9,35 @@ import {
   clipboard,
   desktopCapturer,
   dialog,
+  globalShortcut,
   ipcMain,
+  Menu,
+  nativeImage,
   nativeTheme,
+  Notification,
   protocol,
   session,
-  shell
+  shell,
+  Tray
 } from 'electron'
 import log from 'electron-log/main'
 import manifestJson from '../../resources/downloads-manifest.json'
 import licensesJson from '../../resources/third-party-licenses.json'
-import { licenseUrls } from '../shared/app-info'
+import { APP_ID, licenseUrls } from '../shared/app-info'
 import { AppError } from '../shared/errors'
-import { EVENTS } from '../shared/ipc'
+import { EVENTS, type NavigateTarget } from '../shared/ipc'
+import { resolveLanguage } from '../shared/language'
 import { AUDIO_EXTENSIONS, VIDEO_EXTENSIONS } from '../shared/media'
 import type { ClientStatus, McpClientId } from '../shared/mcp'
+import { applyAutostart, openedHidden } from './background/autostart'
+import { applyBadge } from './background/badge'
+import { BackgroundController } from './background/controller'
+import { FlagsStore } from './background/flags'
+import { OVERLAY_ICON, trayIconDir } from './background/icons'
+import { Notifier } from './background/notify'
+import { Shortcuts } from './background/shortcut'
+import { createTranslate } from './background/texts'
+import { TrayView } from './background/tray'
 import { readDevOverrides } from './dev-overrides'
 import { Installer } from './downloads/installer'
 import { parseManifest } from './downloads/manifest'
@@ -56,7 +71,7 @@ import electronUpdater from 'electron-updater'
 import { createUpdater } from './updates'
 import windowIcon from '../../resources/icon.png?asset'
 import { integrateAppImage } from './linux-integration'
-import { createMainWindow } from './window'
+import { createMainWindow, isWindowInView, keepInTray } from './window'
 import { resolveWorkerCommand, workerEnv } from './worker/locate'
 import { WorkerSupervisor, type Logger } from './worker/supervisor'
 
@@ -67,6 +82,10 @@ if (process.env.WT_USER_DATA) app.setPath('userData', process.env.WT_USER_DATA)
 // macOS 14.2+: áudio do sistema no ao vivo pela captura de tela (precisa ligar antes do ready).
 if (process.platform === 'darwin')
   app.commandLine.appendSwitch('enable-features', MAC_LOOPBACK_FEATURE)
+
+// Wayland: o atalho global vai pelo portal do sistema (o GNOME pede confirmação na 1ª vez).
+if (process.platform === 'linux')
+  app.commandLine.appendSwitch('enable-features', 'GlobalShortcutsPortal')
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -81,6 +100,7 @@ async function main(): Promise<void> {
     return
   }
   await app.whenReady()
+  let quitting = false
   const paths = appPaths(app.getPath('userData'))
   log.transports.file.resolvePathFn = () => join(paths.logs, 'main.log')
   log.transports.file.maxSize = 5 * 1024 * 1024
@@ -167,6 +187,8 @@ async function main(): Promise<void> {
       send(EVENTS.update, event)
     }
   })
+  // Criado depois (precisa da fila e do ao vivo); os eventos chegam só com o app rodando.
+  let background: BackgroundController | null = null
   const queue = new TranscriptionQueue({
     history,
     settings,
@@ -176,6 +198,7 @@ async function main(): Promise<void> {
     emit: (event) => {
       tracker.onQueueEvent(event)
       send(EVENTS.queue, event)
+      background?.onQueueEvent(event)
     },
     logger,
     hasModel: (id, format) => installer.isModelInstalled(id, format)
@@ -188,10 +211,12 @@ async function main(): Promise<void> {
     emit: (event) => {
       tracker.onLive(event)
       send(EVENTS.live, event)
+      background?.onLiveEvent(event)
     },
     onItem: (meta) => {
       tracker.onQueueEvent({ type: 'job', meta })
       send(EVENTS.queue, { type: 'job', meta })
+      background?.onItem(meta)
     },
     logger
   })
@@ -241,6 +266,95 @@ async function main(): Promise<void> {
   const isDev = !app.isPackaged
   const rendererUrl = isDev ? process.env.ELECTRON_RENDERER_URL : undefined
   const indexHtml = join(__dirname, '../renderer/index.html')
+
+  const setupBackground = async (): Promise<{
+    controller: BackgroundController
+    shortcuts: Shortcuts
+    tray: Tray
+    showWindow: (target: NavigateTarget) => void
+  }> => {
+    if (process.platform === 'win32') app.setAppUserModelId(APP_ID) // notificações do Windows
+    const iconDir = trayIconDir({
+      isPackaged: app.isPackaged,
+      resourcesPath: process.resourcesPath,
+      appPath: app.getAppPath()
+    })
+    const translate = () =>
+      createTranslate(resolveLanguage(settings.get().uiLanguage, app.getLocale()))
+    const showWindow = (target: NavigateTarget): void => {
+      window?.show()
+      window?.focus()
+      if (target.kind !== 'window') send(EVENTS.backgroundNavigate, target)
+    }
+    const notifier = new Notifier({
+      Notification,
+      open: showWindow,
+      ...(process.platform === 'linux' ? { icon: windowIcon } : {}),
+      logger
+    })
+    const flags = await FlagsStore.open(paths.state)
+    const shortcuts = new Shortcuts({
+      globalShortcut,
+      onPress: () => background?.toggle(),
+      wayland: process.env.XDG_SESSION_TYPE === 'wayland',
+      logger
+    })
+    const tray = new Tray(join(iconDir, 'tray-normal.png'))
+    const view = new TrayView({
+      tray,
+      buildMenu: (template) => Menu.buildFromTemplate(template),
+      iconDir,
+      platform: process.platform,
+      onAction: (action) => {
+        if (action === 'toggle') background?.toggle()
+        else if (action === 'pause') background?.pause()
+        else if (action === 'resume') background?.resume()
+        else if (action === 'quit') void background?.quit()
+        else showWindow({ kind: 'window' }) // open e setup
+      }
+    })
+    background = new BackgroundController({
+      live,
+      queueIdle: () => queue.isIdle(),
+      ready: () => settings.get().model !== null,
+      command: (command) => {
+        send(EVENTS.backgroundCommand, command)
+      },
+      view,
+      notify: (title, body, target) => {
+        notifier.show(title, body, target)
+      },
+      badge: (active, description) => {
+        applyBadge(active, description, {
+          platform: process.platform,
+          setOverlay: (icon, text) => {
+            window?.setOverlayIcon(icon ? nativeImage.createFromPath(icon) : null, text)
+          },
+          setDockBadge: (text) => {
+            app.dock?.setBadge(text)
+          },
+          overlayIcon: join(iconDir, OVERLAY_ICON)
+        })
+      },
+      shortcut: () => shortcuts.active,
+      windowFocused: () => isWindowInView(window),
+      notifyAi: () => settings.get().tray.notifyAi,
+      translate,
+      flags,
+      quit: () => {
+        quitting = true
+        app.quit()
+      },
+      platform: process.platform,
+      logger
+    })
+    const controller = background
+    if (process.env.WT_E2E_HOOKS === '1') {
+      ;(globalThis as { __wtBackground?: BackgroundController }).__wtBackground = controller
+    }
+    return { controller, shortcuts, tray, showWindow }
+  }
+  const { controller, shortcuts, tray, showWindow } = await setupBackground()
 
   const services: Services = {
     settings,
@@ -299,6 +413,19 @@ async function main(): Promise<void> {
       test: () => runSelfTest(paths.mcpLauncher),
       activity: () => activityLog.recent()
     },
+    background: {
+      onStarted: (input) => {
+        controller.onStarted(input)
+      },
+      report: (report) => {
+        controller.report(report)
+      },
+      shortcutStatus: () => shortcuts.status,
+      suspendShortcut: (on) => {
+        shortcuts.suspend(on)
+        controller.refresh()
+      }
+    },
     liveCapabilities: () => ({ systemAudio: systemAudioSupport(process.platform, release()) }),
     monitorVolume: createMonitorVolume({
       platform: process.platform,
@@ -314,11 +441,34 @@ async function main(): Promise<void> {
     isTrustedSender(event, window?.webContents ?? null)
   )
   applyTheme(nativeTheme, settings.get().theme)
+  const autostart = (enabled: boolean): void => {
+    applyAutostart(enabled, {
+      platform: process.platform,
+      isPackaged: app.isPackaged,
+      app,
+      env: process.env,
+      home: app.getPath('home'),
+      execPath: process.execPath
+    }).catch((error: unknown) => {
+      logger.warn(`[bandeja] iniciar com o sistema: ${String(error)}`)
+    })
+  }
+  shortcuts.apply(settings.get().tray.shortcut)
+  autostart(settings.get().tray.openAtLogin)
+  let previous = settings.get()
+  settings.onChange((next) => {
+    if (next.tray.shortcut !== previous.tray.shortcut) shortcuts.apply(next.tray.shortcut)
+    if (next.tray.openAtLogin !== previous.tray.openAtLogin) autostart(next.tray.openAtLogin)
+    previous = next
+    controller.refresh() // idioma, modelo e atalho aparecem no menu
+  })
+  controller.refresh()
   settings.onChange((next) => {
     applyTheme(nativeTheme, next.theme)
     send(EVENTS.settings, next)
   })
 
+  const startHidden = openedHidden(process.argv, process.platform, () => app.getLoginItemSettings())
   window = createMainWindow({
     BrowserWindowCtor: BrowserWindow,
     preloadPath: join(__dirname, '../preload/index.js'),
@@ -329,7 +479,25 @@ async function main(): Promise<void> {
     isAllowedExternal: (url) => isAllowedExternalUrl(url),
     openExternal: (url) => {
       void shell.openExternal(url)
+    },
+    startHidden
+  })
+  keepInTray(window, {
+    shouldHide: () => !quitting && settings.get().tray.closeToTray,
+    onHidden: () => {
+      controller.onWindowHidden()
     }
+  })
+  // Janela vista (aberta ou só focada): o ponto azul de pedido de IA apaga.
+  window.on('show', () => {
+    controller.onWindowShown()
+  })
+  window.on('focus', () => {
+    controller.onWindowShown()
+  })
+  // Windows: desligar o computador com a sessão aberta; o recover() cobre o que não der tempo.
+  window.on('session-end', () => {
+    void live.stop()
   })
   window.on('closed', () => {
     window = null
@@ -358,16 +526,27 @@ async function main(): Promise<void> {
   }
 
   app.on('second-instance', () => {
-    window?.show()
-    window?.focus()
+    showWindow({ kind: 'window' })
   })
-  app.on('before-quit', () => {
+  app.on('activate', () => {
+    showWindow({ kind: 'window' }) // macOS: clique no Dock
+  })
+  app.on('before-quit', (event) => {
+    // ⌘Q ou "Sair" do sistema no meio da gravação: finaliza antes (a bandeja faz o mesmo).
+    if (!quitting && live.state !== 'idle') {
+      event.preventDefault()
+      void controller.quit()
+      return
+    }
+    quitting = true
+    globalShortcut.unregisterAll()
+    tray.destroy()
     queue.shutdown()
     worker.dispose()
     void bridgeServer.close()
   })
   app.on('window-all-closed', () => {
-    app.quit()
+    if (!settings.get().tray.closeToTray) app.quit()
   })
 }
 

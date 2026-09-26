@@ -1,3 +1,4 @@
+export const APP_ID = 'io.github.eldevanjr.whispertranscriber'
 export const APP_NAME = 'Whisper Transcriber'
 export const APP_AUTHOR = 'Eldevan Nery Junior'
 export const AUTHOR_GITHUB_URL = 'https://github.com/eldevanjr'

@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { AppError, toAppError } from '../../shared/errors'
+import { AppError, ERROR_CODES, toAppError, type ErrorCode } from '../../shared/errors'
 import type { SystemInfo, UpdateInfo } from '../../shared/events'
 import { isJobId, type HistoryMeta } from '../../shared/history'
 import { sanitizeFileName } from '../../shared/media'
@@ -7,12 +7,14 @@ import {
   IPC,
   SEND,
   type AppInfo,
+  type BackgroundReport,
   type IpcResult,
   type LiveCapabilities,
   type McpStatus,
   type McpTestResult,
   type MonitorVolume,
-  type LiveStartInput
+  type LiveStartInput,
+  type ShortcutStatus
 } from '../../shared/ipc'
 import {
   MCP_CLIENT_IDS,
@@ -76,6 +78,12 @@ export interface Services {
     test(): Promise<McpTestResult>
     activity(): Promise<McpActivityLine[]>
   }
+  background: {
+    onStarted(input: LiveStartInput): void
+    report(report: BackgroundReport): void
+    shortcutStatus(): ShortcutStatus
+    suspendShortcut(on: boolean): void
+  }
 }
 
 const None = z.undefined()
@@ -115,6 +123,17 @@ const LiveAudioSchema = z.object({
   seq: z.number().int().min(0),
   pcm: z.instanceof(Int16Array).refine((pcm) => pcm.length === BLOCK_48K, 'bloco de 100 ms')
 })
+const ReportSchema = z.discriminatedUnion('kind', [
+  z.object({
+    kind: z.literal('startFailed'),
+    error: z.object({
+      code: z.enum(ERROR_CODES as [ErrorCode, ...ErrorCode[]]),
+      message: z.string().max(5000),
+      detail: z.string().max(20_000).optional()
+    })
+  }),
+  z.object({ kind: z.literal('deviceLost') })
+])
 
 type On = <S extends z.ZodType>(
   channel: string,
@@ -156,6 +175,7 @@ export function registerIpcHandlers(
   registerSystem(on, services)
   registerLive(on, services)
   registerMcp(on, services)
+  registerBackground(on, services)
   // Blocos de áudio: canal sem resposta (send), validado e só do renderer do app.
   ipc.on(SEND.liveAudio, (event, raw) => {
     const parsed = LiveAudioSchema.safeParse(raw)
@@ -169,7 +189,11 @@ function registerLive(on: On, s: Services): void {
   on(IPC.liveCapabilities, None, () => s.liveCapabilities())
   on(IPC.liveMonitorVolume, None, () => s.monitorVolume.read())
   on(IPC.liveSetMonitorVolume, PercentSchema, (percent) => s.monitorVolume.set(percent))
-  on(IPC.liveStart, LiveStartSchema, (input) => s.live.start(input))
+  on(IPC.liveStart, LiveStartSchema, async (input) => {
+    const started = await s.live.start(input)
+    s.background.onStarted(input)
+    return started
+  })
   on(IPC.liveStop, None, () => s.live.stop())
   on(IPC.livePause, None, () => {
     s.live.pause()
@@ -192,6 +216,17 @@ function registerMcp(on: On, s: Services): void {
   on(IPC.mcpDisconnect, ClientIdSchema, (id) => s.mcp.disconnect(id))
   on(IPC.mcpTest, None, () => s.mcp.test())
   on(IPC.mcpActivity, None, () => s.mcp.activity())
+}
+function registerBackground(on: On, s: Services): void {
+  on(IPC.backgroundReport, ReportSchema, (report) => {
+    s.background.report(report)
+    return null
+  })
+  on(IPC.backgroundShortcutStatus, None, () => s.background.shortcutStatus())
+  on(IPC.backgroundSuspendShortcut, z.boolean(), (on) => {
+    s.background.suspendShortcut(on)
+    return null
+  })
 }
 
 function registerSettingsAndQueue(on: On, s: Services): void {
