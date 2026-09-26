@@ -35,6 +35,7 @@ import {
   systemAudioSupport
 } from './live/system-audio'
 import { createMediaHandler, MEDIA_SCHEME } from './media-protocol'
+import { isMcpMode, runMcp } from './mcp/entry'
 import { appPaths, modelDir } from './paths'
 import { TranscriptionQueue } from './queue/queue'
 import { applyCsp, isAllowedExternalUrl, isAllowedNavigation, isTrustedSender } from './security'
@@ -302,7 +303,22 @@ async function main(): Promise<void> {
   })
 }
 
-main().catch((error: unknown) => {
+/** Modo MCP (argv `--mcp`): desvia antes do `main()`, sem single-instance lock (spec §5.2). */
+async function boot(): Promise<void> {
+  if (isMcpMode(process.argv)) {
+    await runMcp({
+      app,
+      stdin: process.stdin,
+      stdout: process.stdout,
+      paths: appPaths(app.getPath('userData')),
+      logger: log
+    })
+    return
+  }
+  await main()
+}
+
+boot().catch((error: unknown) => {
   log.error(error)
   app.quit()
 })
