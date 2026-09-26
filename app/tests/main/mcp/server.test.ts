@@ -10,6 +10,7 @@ import { ActivityLog } from '../../../src/main/mcp/activity'
 import { TranscriptLibrary } from '../../../src/main/mcp/library'
 import { MCP_DISABLED_MESSAGE, TRANSCRIPTION_WARNING } from '../../../src/main/mcp/tools-read'
 import { clientNameOf, createMcpServer, type BridgePort } from '../../../src/main/mcp/server'
+import { clientDisplayName } from '../../../src/shared/mcp'
 import { DEFAULT_SETTINGS, type Settings } from '../../../src/shared/settings'
 import { makeTempDir } from '../../helpers/tmp'
 
@@ -70,6 +71,7 @@ async function connect(
   options: {
     enabled?: boolean
     readSettings?: () => Promise<Settings>
+    clientName?: string
   } = {}
 ): Promise<TestContext> {
   const root = join(await makeTempDir(), 'history')
@@ -90,7 +92,10 @@ async function connect(
     version: '9.9.9'
   })
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
-  const client = new Client({ name: 'claude-code', version: '1.0.0' }, { capabilities: {} })
+  const client = new Client(
+    { name: options.clientName ?? 'claude-code', version: '1.0.0' },
+    { capabilities: {} }
+  )
   await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
   return { root, settings, store, library, activity, server, client }
 }
@@ -420,6 +425,15 @@ describe('access key', () => {
     })
     expect(clientNameOf(fresh)).toBe('unknown')
     expect(clientNameOf(ctx.server)).toBe('claude-code')
+  })
+
+  it('normalizes a claude-ai handshake to claude-desktop in activity and badge', async () => {
+    const ctx = await connectTracked({ clientName: 'claude-ai' })
+    const item = await doneItem(ctx)
+    await call(ctx, 'get_transcription', { id: item.id })
+    const [line] = await ctx.activity.recent()
+    expect(line?.client).toBe('claude-desktop')
+    expect(clientDisplayName(line?.client ?? '')).toBe('Claude Desktop')
   })
 })
 

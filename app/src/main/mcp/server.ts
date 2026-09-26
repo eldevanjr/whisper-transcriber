@@ -1,6 +1,6 @@
 import { McpServer, ResourceTemplate } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { ErrorCode, McpError, type Resource } from '@modelcontextprotocol/sdk/types.js'
-import type { ActivitySnapshot, JobProgress } from '../../shared/mcp'
+import { clientIdOf, type ActivitySnapshot, type JobProgress } from '../../shared/mcp'
 import type { JobStatus } from '../../shared/history'
 import type { Settings } from '../../shared/settings'
 import type { ActivityLog } from './activity'
@@ -62,9 +62,12 @@ export function createMcpServer(deps: McpServerDeps): McpServer {
   return server
 }
 
-/** `clientInfo.name` do handshake (spec §5.2); antes de inicializar não há cliente. */
+/**
+ * `clientInfo.name` do handshake (spec §5.2) normalizado para o id do cliente (spec §11.3);
+ * antes de inicializar não há cliente.
+ */
 export function clientNameOf(server: McpServer): string {
-  return server.server.getClientVersion()?.name ?? 'unknown'
+  return clientIdOf(server.server.getClientVersion()?.name ?? 'unknown')
 }
 
 /** `resources/list` + `resources/read` sobre `transcription://<id>` (spec §9.10). */

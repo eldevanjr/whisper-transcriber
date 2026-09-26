@@ -7,7 +7,8 @@ import {
   MCP_CLIENT_IDS,
   MCP_CLIENT_NAMES,
   McpActivityLineSchema,
-  clientDisplayName
+  clientDisplayName,
+  clientIdOf
 } from '../../src/shared/mcp'
 
 const JOB_ID = '3f1c2a4e-8b7d-4c6a-9e2f-1a2b3c4d5e6f'
@@ -45,6 +46,39 @@ describe('nome de exibição dos clientes MCP', () => {
 
   it('id desconhecido volta como veio', () => {
     expect(clientDisplayName('minha-ia')).toBe('minha-ia')
+  })
+})
+
+describe('normalização do nome do cliente MCP', () => {
+  it('mapeia cada trecho da tabela da §11.3 para o id', () => {
+    const table: [string, string][] = [
+      ['claude-code', 'claude-code'],
+      ['claude-ai', 'claude-desktop'],
+      ['codex', 'codex'],
+      ['opencode', 'opencode'],
+      ['cursor', 'cursor'],
+      ['visual studio code', 'vscode'],
+      ['vscode', 'vscode'],
+      ['gemini', 'gemini-cli'],
+      ['windsurf', 'windsurf']
+    ]
+    for (const [name, id] of table) expect(clientIdOf(name)).toBe(id)
+  })
+
+  it('casa sem maiúsculas e por trecho (nome real do handshake)', () => {
+    expect(clientIdOf('Claude-AI')).toBe('claude-desktop')
+    expect(clientIdOf('claude-code/2.0.1')).toBe('claude-code')
+    expect(clientIdOf('Visual Studio Code')).toBe('vscode')
+    expect(clientIdOf('gemini-cli')).toBe('gemini-cli')
+  })
+
+  it('nome desconhecido volta cru, truncado em 40 caracteres', () => {
+    expect(clientIdOf('minha-ia')).toBe('minha-ia')
+    expect(clientIdOf('x'.repeat(50))).toBe('x'.repeat(40))
+  })
+
+  it('clientDisplayName também aceita nome cru normalizável', () => {
+    expect(clientDisplayName('claude-ai')).toBe('Claude Desktop')
   })
 })
 

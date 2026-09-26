@@ -11,7 +11,7 @@ import { TranscriptLibrary } from '../../../src/main/mcp/library'
 import { createMcpServer, type BridgePort } from '../../../src/main/mcp/server'
 import { TRANSCRIPTION_WARNING } from '../../../src/main/mcp/tools-read'
 import { AppError } from '../../../src/shared/errors'
-import type { ActivitySnapshot, JobProgress } from '../../../src/shared/mcp'
+import { clientDisplayName, type ActivitySnapshot, type JobProgress } from '../../../src/shared/mcp'
 import { DEFAULT_SETTINGS } from '../../../src/shared/settings'
 import { makeTempDir } from '../../helpers/tmp'
 
@@ -73,6 +73,7 @@ interface TestContext {
 interface StartOptions {
   now?: () => number
   sleep?: (ms: number) => Promise<void>
+  clientName?: string
 }
 
 type Configure = (store: HistoryStore) => Promise<{ bridge: BridgePort } & StartOptions>
@@ -82,7 +83,7 @@ async function open(configure: Configure): Promise<TestContext> {
   const activityDir = await makeTempDir()
   const store = new HistoryStore(root)
   const library = new TranscriptLibrary(store, LABELS)
-  const { bridge, now, sleep } = await configure(store)
+  const { bridge, now, sleep, clientName } = await configure(store)
   const server = createMcpServer({
     library,
     activity: new ActivityLog(join(activityDir, 'activity.jsonl')),
@@ -97,7 +98,10 @@ async function open(configure: Configure): Promise<TestContext> {
     ...(sleep ? { sleep } : {})
   })
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
-  const client = new Client({ name: 'claude-code', version: '1.0.0' }, { capabilities: {} })
+  const client = new Client(
+    { name: clientName ?? 'claude-code', version: '1.0.0' },
+    { capabilities: {} }
+  )
   await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
   return { root, store, library, server, client }
 }
@@ -410,6 +414,22 @@ describe('transcribe_file', () => {
     const result = await call(ctx, 'transcribe_file', { path: await mediaFile() })
     expect(result.structuredContent).toMatchObject({ status: 'queued', position: 1 })
     expect(textOf(result)).toContain('aula.mp4')
+  })
+
+  it('sends the normalized client id to the bridge so requestedBy is the client id', async () => {
+    let seen: string | undefined
+    const ctx = await tracked(async () => ({
+      clientName: 'claude-ai',
+      bridge: fakeBridge({
+        transcribe: async (_path, client) => {
+          seen = client
+          return { id: randomUUID(), status: 'queued', position: 1 }
+        }
+      })
+    }))
+    await call(ctx, 'transcribe_file', { path: await mediaFile() })
+    expect(seen).toBe('claude-desktop')
+    expect(clientDisplayName(seen ?? '')).toBe('Claude Desktop')
   })
 
   it('reports a null position when the bridge omits it', async () => {

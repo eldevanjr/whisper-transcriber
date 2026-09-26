@@ -134,14 +134,7 @@ export class TranscriptLibrary {
     if (needle === '') return []
     const max = clamp(filter.limit ?? LIST_DEFAULT, 1, LIMIT_MAX)
     const { entries } = await this.history.list()
-    const hits: SearchHit[] = []
-    for (const meta of entries) {
-      if (!matchesItem(meta, filter)) continue
-      const transcript = sortByStart(await this.history.readActive(meta))
-      collectHits(meta, transcript, needle, hits)
-      if (hits.length >= max) break
-    }
-    return hits.slice(0, max)
+    return this.collectSearch(entries, filter, needle, max)
   }
 
   async read(id: string, options: ReadOptions = {}): Promise<ReadResult> {
@@ -230,6 +223,33 @@ export class TranscriptLibrary {
     if (meta.tracks !== undefined) item.tracks = meta.tracks
     if (meta.requestedBy !== undefined) item.requestedBy = meta.requestedBy
     return item
+  }
+
+  /** Percorre os itens que casam com o filtro, somando ocorrências até o limite (spec §9.2). */
+  private async collectSearch(
+    entries: HistoryMeta[],
+    filter: SearchFilter,
+    needle: string,
+    max: number
+  ): Promise<SearchHit[]> {
+    const hits: SearchHit[] = []
+    for (const meta of entries) {
+      if (!matchesItem(meta, filter)) continue
+      const transcript = await this.searchableTranscript(meta)
+      if (transcript === null) continue
+      collectHits(meta, transcript, needle, hits)
+      if (hits.length >= max) break
+    }
+    return hits.slice(0, max)
+  }
+
+  /** Transcrição ativa ordenada; `null` quando o transcript está corrompido (como `list` pula). */
+  private async searchableTranscript(meta: HistoryMeta): Promise<TranscriptEntry[] | null> {
+    try {
+      return sortByStart(await this.history.readActive(meta))
+    } catch {
+      return null
+    }
   }
 
   private async versionEntries(

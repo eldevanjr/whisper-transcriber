@@ -277,6 +277,18 @@ describe('TranscriptLibrary.search', () => {
       live.id
     ])
   })
+
+  it('pula item com transcript corrompido e ainda acha no item saudável', async () => {
+    const { store, library } = ctx
+    const healthy = await doneItem(store, '/v/saudavel.mp4', ['alvo saudável'])
+    const corrupt = await store.create({ ...JOB, sourcePath: '/v/corrompido.mp4' })
+    await writeFile(store.paths(corrupt.id).transcript, '{ não é json')
+    await store.update(corrupt.id, { status: 'done' })
+
+    const hits = await library.search('alvo')
+    expect(hits.map((hit) => hit.id)).toEqual([healthy.id])
+    expect((await library.list()).items.map((item) => item.id)).toContain(corrupt.id)
+  })
 })
 
 describe('TranscriptLibrary.read', () => {

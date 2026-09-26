@@ -68,7 +68,7 @@ export function registerActivityTools(
   server.registerTool(
     'get_status',
     {
-      description: `Get one transcription status and the segments transcribed since a previous call. ${TRANSCRIPTION_WARNING}`,
+      description: `Get one transcription status and the segments transcribed since a previous call. The "after" cursor is a count over the current version; during a multi-track live redo the active version can flip from the append-order partial to the start-sorted final transcript, so a cursor taken mid-transition may repeat or skip segments — re-read from after=0 if the sequence looks wrong. ${TRANSCRIPTION_WARNING}`,
       inputSchema: z.object({
         id: z.uuid(),
         after: z.number().int().min(0).optional()

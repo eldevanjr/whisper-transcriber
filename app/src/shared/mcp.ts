@@ -30,9 +30,36 @@ export const MCP_CLIENT_NAMES: Record<McpClientId, string> = {
 
 const MCP_CLIENT_NAME_BY_ID = new Map<string, string>(Object.entries(MCP_CLIENT_NAMES))
 
-/** Nome de exibição do cliente pelo id; id desconhecido volta como veio (spec §11.3). */
+/** Tamanho máximo do nome cru guardado nos registros (spec §11.3). */
+const CLIENT_NAME_MAX = 40
+
+/**
+ * Correspondência de trecho, sem maiúsculas, do `clientInfo.name` para o id do cliente
+ * (spec §11.3). A ordem importa onde um trecho contém outro.
+ */
+const MCP_CLIENT_ID_MATCHERS: readonly (readonly [string, McpClientId])[] = [
+  ['claude-code', 'claude-code'],
+  ['claude-ai', 'claude-desktop'],
+  ['codex', 'codex'],
+  ['opencode', 'opencode'],
+  ['cursor', 'cursor'],
+  ['visual studio code', 'vscode'],
+  ['vscode', 'vscode'],
+  ['gemini', 'gemini-cli'],
+  ['windsurf', 'windsurf']
+]
+
+/** Normaliza o `clientInfo.name` do handshake para o id do cliente (spec §11.3). */
+export function clientIdOf(name: string): string {
+  const lower = name.toLowerCase()
+  const match = MCP_CLIENT_ID_MATCHERS.find(([needle]) => lower.includes(needle))
+  return match === undefined ? name.slice(0, CLIENT_NAME_MAX) : match[1]
+}
+
+/** Nome de exibição do cliente pelo id ou nome do handshake; desconhecido volta como veio. */
 export function clientDisplayName(id: string): string {
-  return MCP_CLIENT_NAME_BY_ID.get(id) ?? id
+  const normalized = clientIdOf(id)
+  return MCP_CLIENT_NAME_BY_ID.get(normalized) ?? normalized
 }
 
 /** Três estados de um cliente no menu (spec §11.1). */
