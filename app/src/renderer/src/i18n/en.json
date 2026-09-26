@@ -53,7 +53,14 @@
     "LIVE_NOT_STARTED": "No live session is running.",
     "LIVE_ACTIVE": "A live transcription is already running.",
     "QUEUE_BUSY": "Wait for the queue to finish (or cancel the current file) to start live.",
-    "MIC_DENIED": "Microphone access was denied."
+    "MIC_DENIED": "Microphone access was denied.",
+    "MCP_DISABLED": "AI access is turned off in Whisper Transcriber (Settings → AI assistants).",
+    "TRANSCRIBE_DISABLED": "Transcribing via AI is turned off in Whisper Transcriber settings.",
+    "APP_START_TIMEOUT": "Whisper Transcriber did not start in time.",
+    "SETUP_INCOMPLETE": "Finish Whisper Transcriber setup and try again.",
+    "CONFIG_INVALID": "The AI configuration file has an error; use the manual configuration.",
+    "CONFIG_HAS_COMMENTS": "The AI file has comments; to avoid losing them, use the manual configuration.",
+    "CLIENT_CLI_FAILED": "The AI command failed."
   },
   "notices": {
     "cudaFallback": "The GPU failed; this transcription continued on the CPU.",

@@ -34,7 +34,9 @@ export const HistoryMetaSchema = z.object({
   // Transcrição ao vivo: faixas gravadas e qual versão aparece (ao vivo ou refeita).
   kind: z.enum(['file', 'live']).default('file'),
   tracks: z.array(z.enum(TRACKS)).optional(),
-  activeVersion: z.enum(['live', 'redo']).optional()
+  activeVersion: z.enum(['live', 'redo']).optional(),
+  // Cliente MCP que pediu a transcrição (id normalizado, §11.3); ausente = pedido pelo app.
+  requestedBy: z.string().optional()
 })
 export type HistoryMeta = z.infer<typeof HistoryMetaSchema>
 

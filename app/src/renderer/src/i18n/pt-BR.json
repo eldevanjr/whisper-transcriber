@@ -53,7 +53,14 @@
     "LIVE_NOT_STARTED": "Nenhuma sessão ao vivo em andamento.",
     "LIVE_ACTIVE": "Já há uma transcrição ao vivo em andamento.",
     "QUEUE_BUSY": "Espere a fila terminar (ou cancele o arquivo atual) para começar o ao vivo.",
-    "MIC_DENIED": "O acesso ao microfone foi negado."
+    "MIC_DENIED": "O acesso ao microfone foi negado.",
+    "MCP_DISABLED": "O acesso de IAs está desligado no Whisper Transcriber (Configurações → IAs).",
+    "TRANSCRIBE_DISABLED": "Transcrever por IA está desligado nas configurações do Whisper Transcriber.",
+    "APP_START_TIMEOUT": "O Whisper Transcriber não iniciou a tempo.",
+    "SETUP_INCOMPLETE": "Conclua a configuração inicial do Whisper Transcriber e tente de novo.",
+    "CONFIG_INVALID": "O arquivo de configuração da IA tem um erro; use a configuração manual.",
+    "CONFIG_HAS_COMMENTS": "O arquivo da IA tem comentários; para não perdê-los, use a configuração manual.",
+    "CLIENT_CLI_FAILED": "O comando da IA falhou."
   },
   "notices": {
     "cudaFallback": "A GPU falhou; esta transcrição seguiu na CPU.",
