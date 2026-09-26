@@ -13,7 +13,10 @@ const CONFIG_FILE = 'claude_desktop_config.json'
 
 /** Claude Desktop (spec §11.2): `mcpServers` em `claude_desktop_config.json`; precisa reiniciar. */
 export function createClaudeDesktopConnector(deps: ConnectorDeps): McpClientConnector {
-  const entry = (d: ConnectorDeps): Record<string, unknown> => ({ command: d.launcherPath, args: [] })
+  const entry = (d: ConnectorDeps): Record<string, unknown> => ({
+    command: d.launcherPath,
+    args: []
+  })
   return createJsonConnector(deps, {
     id: 'claude-desktop',
     name: MCP_CLIENT_NAMES['claude-desktop'],

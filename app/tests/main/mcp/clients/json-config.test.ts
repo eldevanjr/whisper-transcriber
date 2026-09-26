@@ -160,7 +160,9 @@ describe('mergeJsonConfig', () => {
   it('JSON inválido não é tocado nem ganha backup', async () => {
     await mkdir(join(root, 'nested'), { recursive: true })
     await writeFile(file, '{ quebrado', 'utf8')
-    await expect(mergeJsonConfig(file, () => undefined)).rejects.toMatchObject({ code: 'CONFIG_INVALID' })
+    await expect(mergeJsonConfig(file, () => undefined)).rejects.toMatchObject({
+      code: 'CONFIG_INVALID'
+    })
     expect(await readFile(file, 'utf8')).toBe('{ quebrado')
     await expect(readFile(`${file}.bak`, 'utf8')).rejects.toThrow()
   })
@@ -195,7 +197,11 @@ describe('removeJsonConfig', () => {
 
   it('mantém mcpServers vazio quando era o único servidor', async () => {
     await mkdir(join(root, 'nested'), { recursive: true })
-    await writeFile(file, JSON.stringify({ mcpServers: { [CONFIG_KEY]: { command: '/l' } } }), 'utf8')
+    await writeFile(
+      file,
+      JSON.stringify({ mcpServers: { [CONFIG_KEY]: { command: '/l' } } }),
+      'utf8'
+    )
     await removeJsonConfig(file, (data) => {
       const servers = data.mcpServers as Record<string, unknown> | undefined
       if (servers) Reflect.deleteProperty(servers, CONFIG_KEY)

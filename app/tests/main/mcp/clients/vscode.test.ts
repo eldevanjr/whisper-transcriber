@@ -33,7 +33,9 @@ describe('vscode', () => {
   it('detect: found com o executável e sem a entrada', async () => {
     await mkdir(dirname(userFile()), { recursive: true })
     await writeFile(userFile(), JSON.stringify({ servers: { outro: { command: '/x' } } }), 'utf8')
-    const connector = createVscodeConnector(makeDeps({ home: root, cli: recordingCli('/bin/code') }))
+    const connector = createVscodeConnector(
+      makeDeps({ home: root, cli: recordingCli('/bin/code') })
+    )
     expect(await connector.detect()).toBe('found')
   })
 
@@ -44,7 +46,9 @@ describe('vscode', () => {
       JSON.stringify({ servers: { 'whisper-transcriber': { command: LAUNCHER } } }),
       'utf8'
     )
-    const connector = createVscodeConnector(makeDeps({ home: root, cli: recordingCli('/bin/code') }))
+    const connector = createVscodeConnector(
+      makeDeps({ home: root, cli: recordingCli('/bin/code') })
+    )
     expect(await connector.detect()).toBe('connected')
   })
 
@@ -72,7 +76,9 @@ describe('vscode', () => {
       }),
       'utf8'
     )
-    const connector = createVscodeConnector(makeDeps({ home: root, cli: recordingCli('/bin/code') }))
+    const connector = createVscodeConnector(
+      makeDeps({ home: root, cli: recordingCli('/bin/code') })
+    )
     await connector.disconnect()
     expect(JSON.parse(await readFile(userFile(), 'utf8'))).toEqual({
       servers: { outro: { command: '/x' } }
@@ -84,13 +90,17 @@ describe('vscode', () => {
     await mkdir(dirname(userFile()), { recursive: true })
     const text = '// mcp do usuário\n{ "servers": {} }\n'
     await writeFile(userFile(), text, 'utf8')
-    const connector = createVscodeConnector(makeDeps({ home: root, cli: recordingCli('/bin/code') }))
+    const connector = createVscodeConnector(
+      makeDeps({ home: root, cli: recordingCli('/bin/code') })
+    )
     await expect(connector.disconnect()).rejects.toMatchObject({ code: 'CONFIG_HAS_COMMENTS' })
     expect(await readFile(userFile(), 'utf8')).toBe(text)
   })
 
   it('detect: found com o executável e sem o arquivo', async () => {
-    const connector = createVscodeConnector(makeDeps({ home: root, cli: recordingCli('/bin/code') }))
+    const connector = createVscodeConnector(
+      makeDeps({ home: root, cli: recordingCli('/bin/code') })
+    )
     expect(await connector.detect()).toBe('found')
   })
 
@@ -101,14 +111,18 @@ describe('vscode', () => {
       JSON.stringify({ mcpServers: { 'whisper-transcriber': { command: LAUNCHER } } }),
       'utf8'
     )
-    const connector = createVscodeConnector(makeDeps({ home: root, cli: recordingCli('/bin/code') }))
+    const connector = createVscodeConnector(
+      makeDeps({ home: root, cli: recordingCli('/bin/code') })
+    )
     expect(await connector.detect()).toBe('connected')
   })
 
   it('detect: found quando a seção não é objeto', async () => {
     await mkdir(dirname(userFile()), { recursive: true })
     await writeFile(userFile(), JSON.stringify({ servers: 5 }), 'utf8')
-    const connector = createVscodeConnector(makeDeps({ home: root, cli: recordingCli('/bin/code') }))
+    const connector = createVscodeConnector(
+      makeDeps({ home: root, cli: recordingCli('/bin/code') })
+    )
     expect(await connector.detect()).toBe('found')
   })
 
@@ -119,14 +133,18 @@ describe('vscode', () => {
       JSON.stringify({ servers: { 'whisper-transcriber': { command: '/antigo' } } }),
       'utf8'
     )
-    const connector = createVscodeConnector(makeDeps({ home: root, cli: recordingCli('/bin/code') }))
+    const connector = createVscodeConnector(
+      makeDeps({ home: root, cli: recordingCli('/bin/code') })
+    )
     expect(await connector.detect()).toBe('found')
     expect((await connector.status()).error?.message).toMatch(/connect again/i)
   })
 
   it('propaga config inválida e comentários no status', async () => {
     await mkdir(dirname(userFile()), { recursive: true })
-    const connector = createVscodeConnector(makeDeps({ home: root, cli: recordingCli('/bin/code') }))
+    const connector = createVscodeConnector(
+      makeDeps({ home: root, cli: recordingCli('/bin/code') })
+    )
     await writeFile(userFile(), '{ quebrado', 'utf8')
     expect((await connector.status()).error?.code).toBe('CONFIG_INVALID')
     await writeFile(userFile(), '// nota\n{ "servers": {} }\n', 'utf8')

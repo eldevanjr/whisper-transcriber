@@ -57,7 +57,9 @@ async function update(
   const text = await readText(file)
   if (text === null && !create) return
   const data =
-    text === null || text.trim() === '' ? {} : asObject(parseJson(text, options.allowComments === true))
+    text === null || text.trim() === ''
+      ? {}
+      : asObject(parseJson(text, options.allowComments === true))
   mutate(data)
   if (text !== null) await writeFileAtomic(`${file}.bak`, text)
   await writeFileAtomic(file, `${JSON.stringify(data, null, 2)}\n`)

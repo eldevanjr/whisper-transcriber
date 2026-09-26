@@ -52,7 +52,11 @@ export function createCliFinder(deps: CliDeps): (name: string) => Promise<string
   const fileExists = deps.fileExists ?? defaultFileExists
   const shellPath = createShellPath(deps)
   return async (name) => {
-    const dirs = [...pathDirs(deps.env.PATH, deps.platform), ...(await shellPath()), ...knownDirs(deps)]
+    const dirs = [
+      ...pathDirs(deps.env.PATH, deps.platform),
+      ...(await shellPath()),
+      ...knownDirs(deps)
+    ]
     for (const dir of dirs) {
       const found = await findInDir(dir, name, deps.platform, fileExists)
       if (found !== null) return found
@@ -62,11 +66,7 @@ export function createCliFinder(deps: CliDeps): (name: string) => Promise<string
 }
 
 /** Localiza o executável e roda o comando; executável ausente vira `CLIENT_CLI_FAILED`. */
-export async function runFound(
-  cli: Cli,
-  name: string,
-  args: readonly string[]
-): Promise<void> {
+export async function runFound(cli: Cli, name: string, args: readonly string[]): Promise<void> {
   const executable = await cli.find(name)
   if (executable === null) {
     throw new AppError('CLIENT_CLI_FAILED', `The ${name} executable was not found.`)
@@ -109,10 +109,7 @@ function cliFailure(error: unknown): AppError {
     .filter((value): value is string => typeof value === 'string' && value.trim() !== '')
     .map((value) => value.trim())
     .join('\n')
-  return new AppError(
-    'CLIENT_CLI_FAILED',
-    output === '' ? String(record.message ?? error) : output
-  )
+  return new AppError('CLIENT_CLI_FAILED', output === '' ? String(record.message ?? error) : output)
 }
 
 function createShellPath(deps: CliDeps): () => Promise<string[]> {

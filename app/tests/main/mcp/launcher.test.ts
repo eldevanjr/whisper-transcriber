@@ -63,12 +63,12 @@ describe('launcherTarget', () => {
     })
     // O argumento tem que ser o diretório de package.json; `out/main/index.js` faria o Electron
     // usar outro app/userData (spec §6: o processo MCP lê os dados do app de verdade).
-    expect(launcherTarget({ ...base, isPackaged: false, platform: 'linux', appPath }).args).toEqual([
-      appPath
-    ])
-    expect(
-      launcherTarget({ ...base, isPackaged: false, platform: 'win32', appPath }).command
-    ).toBe(join(appPath, 'node_modules', 'electron', 'dist', 'electron.exe'))
+    expect(launcherTarget({ ...base, isPackaged: false, platform: 'linux', appPath }).args).toEqual(
+      [appPath]
+    )
+    expect(launcherTarget({ ...base, isPackaged: false, platform: 'win32', appPath }).command).toBe(
+      join(appPath, 'node_modules', 'electron', 'dist', 'electron.exe')
+    )
     expect(
       launcherTarget({ ...base, isPackaged: false, platform: 'darwin', appPath }).command
     ).toBe(
@@ -96,9 +96,7 @@ describe('writeLauncher', () => {
   it('POSIX: script sh exato e modo 0755', async () => {
     const paths = appPaths(root, 'linux')
     await writeLauncher(paths, { command: EXEC, args: [] }, 'linux')
-    expect(await readFile(paths.mcpLauncher, 'utf8')).toBe(
-      `#!/bin/sh\nexec "${EXEC}" --mcp "$@"\n`
-    )
+    expect(await readFile(paths.mcpLauncher, 'utf8')).toBe(`#!/bin/sh\nexec "${EXEC}" --mcp "$@"\n`)
     if (process.platform !== 'win32') {
       expect((await stat(paths.mcpLauncher)).mode & 0o777).toBe(0o755)
     }

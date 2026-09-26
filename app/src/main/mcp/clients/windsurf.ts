@@ -5,7 +5,10 @@ import type { ConnectorDeps, McpClientConnector } from './registry'
 
 /** Windsurf (spec §11.2): `mcpServers` em `mcp_config.json`; precisa reiniciar. */
 export function createWindsurfConnector(deps: ConnectorDeps): McpClientConnector {
-  const entry = (d: ConnectorDeps): Record<string, unknown> => ({ command: d.launcherPath, args: [] })
+  const entry = (d: ConnectorDeps): Record<string, unknown> => ({
+    command: d.launcherPath,
+    args: []
+  })
   return createJsonConnector(deps, {
     id: 'windsurf',
     name: MCP_CLIENT_NAMES.windsurf,

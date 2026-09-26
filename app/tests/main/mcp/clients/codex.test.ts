@@ -41,18 +41,24 @@ describe('codex', () => {
 
   it('detect: found com o executável mas sem a seção', async () => {
     await writeCodexConfig('[outra]\ncommand = "/x"')
-    const connector = createCodexConnector(makeDeps({ home: root, cli: recordingCli('/bin/codex') }))
+    const connector = createCodexConnector(
+      makeDeps({ home: root, cli: recordingCli('/bin/codex') })
+    )
     expect(await connector.detect()).toBe('found')
   })
 
   it('detect: found quando ainda não há config.toml', async () => {
-    const connector = createCodexConnector(makeDeps({ home: root, cli: recordingCli('/bin/codex') }))
+    const connector = createCodexConnector(
+      makeDeps({ home: root, cli: recordingCli('/bin/codex') })
+    )
     expect(await connector.detect()).toBe('found')
   })
 
   it('detect: connected quando o config.toml tem a seção', async () => {
     await writeCodexConfig(tomlFor(LAUNCHER))
-    const connector = createCodexConnector(makeDeps({ home: root, cli: recordingCli('/bin/codex') }))
+    const connector = createCodexConnector(
+      makeDeps({ home: root, cli: recordingCli('/bin/codex') })
+    )
     expect(await connector.detect()).toBe('connected')
   })
 
@@ -92,7 +98,8 @@ describe('codex', () => {
   })
 
   it('manual: escapa barras invertidas no Windows', () => {
-    const launcher = 'C:\\Users\\u\\AppData\\Roaming\\Whisper Transcriber\\mcp\\whisper-transcriber-mcp.cmd'
+    const launcher =
+      'C:\\Users\\u\\AppData\\Roaming\\Whisper Transcriber\\mcp\\whisper-transcriber-mcp.cmd'
     const connector = createCodexConnector(
       makeDeps({ home: root, platform: 'win32', launcherPath: launcher })
     )

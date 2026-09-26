@@ -5,7 +5,10 @@ import type { ConnectorDeps, McpClientConnector } from './registry'
 
 /** Cursor (spec §11.2): `mcpServers` em `~/.cursor/mcp.json`; precisa reiniciar. */
 export function createCursorConnector(deps: ConnectorDeps): McpClientConnector {
-  const entry = (d: ConnectorDeps): Record<string, unknown> => ({ command: d.launcherPath, args: [] })
+  const entry = (d: ConnectorDeps): Record<string, unknown> => ({
+    command: d.launcherPath,
+    args: []
+  })
   return createJsonConnector(deps, {
     id: 'cursor',
     name: MCP_CLIENT_NAMES.cursor,

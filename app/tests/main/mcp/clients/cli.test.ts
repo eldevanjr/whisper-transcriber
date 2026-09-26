@@ -124,7 +124,10 @@ describe('createCliFinder', () => {
 describe('runCli', () => {
   it('devolve stdout e stderr no sucesso', async () => {
     const execFile = vi.fn<ExecFileFn>(async () => ({ stdout: 'saida', stderr: 'aviso' }))
-    expect(await runCli('/bin/x', ['a'], { execFile })).toEqual({ stdout: 'saida', stderr: 'aviso' })
+    expect(await runCli('/bin/x', ['a'], { execFile })).toEqual({
+      stdout: 'saida',
+      stderr: 'aviso'
+    })
     expect(execFile).toHaveBeenCalledWith('/bin/x', ['a'], { timeout: CLI_TIMEOUT_MS })
   })
 
@@ -168,9 +171,9 @@ describe('runCli', () => {
   })
 
   it('erro sem mensagem usa o valor original', async () => {
-    await expect(runCli('/bin/x', [], { execFile: () => Promise.reject({}) })).rejects.toMatchObject(
-      { code: 'CLIENT_CLI_FAILED', message: '[object Object]' }
-    )
+    await expect(
+      runCli('/bin/x', [], { execFile: () => Promise.reject({}) })
+    ).rejects.toMatchObject({ code: 'CLIENT_CLI_FAILED', message: '[object Object]' })
   })
 })
 
