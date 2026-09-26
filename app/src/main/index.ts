@@ -1,5 +1,5 @@
 import { execFile, spawn } from 'node:child_process'
-import { readFile, writeFile } from 'node:fs/promises'
+import { readFile, rm, writeFile } from 'node:fs/promises'
 import { release, totalmem } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
@@ -228,6 +228,7 @@ async function main(): Promise<void> {
       updater.install()
     },
     dataDir: paths.root,
+    clearActivity: () => rm(paths.mcpActivity, { force: true }),
     externalUrls: licenseUrls(licensesJson),
     live,
     liveCapabilities: () => ({ systemAudio: systemAudioSupport(process.platform, release()) }),

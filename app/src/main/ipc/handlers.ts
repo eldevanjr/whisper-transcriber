@@ -43,6 +43,8 @@ export interface Services {
   installUpdate(): void
   dataDir: string
   appInfo(): AppInfo
+  /** "Limpar histórico" também apaga `mcp/activity.jsonl` (spec §12). */
+  clearActivity(): Promise<void>
   /** Links extras permitidos (páginas dos projetos em Licenças). */
   externalUrls: ReadonlySet<string>
   liveCapabilities(): LiveCapabilities
@@ -191,10 +193,12 @@ function registerHistory(on: On, s: Services): void {
   on(IPC.historySetVersion, SetVersionSchema, ({ id, version }) => s.queue.setVersion(id, version))
   on(IPC.historyStats, None, () => s.history.stats())
   on(IPC.historyRemove, JobId, (id) => s.queue.removeEntry(id))
-  on(IPC.historyClear, None, () => {
+  on(IPC.historyClear, None, async () => {
     if (!s.queue.isIdle())
       throw new AppError('INVALID_REQUEST', 'Aguarde a fila terminar para limpar o histórico')
-    return s.history.clear()
+    const stats = await s.history.clear()
+    await s.clearActivity()
+    return stats
   })
 }
 

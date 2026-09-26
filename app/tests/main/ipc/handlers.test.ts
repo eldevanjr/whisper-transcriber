@@ -71,6 +71,7 @@ function setup(settingsOverride: Partial<Settings> = {}) {
     checkUpdates: vi.fn(() => Promise.resolve(null)),
     installUpdate: vi.fn(),
     dataDir: '/dados',
+    clearActivity: vi.fn(() => Promise.resolve()),
     appInfo: vi.fn(() => ({ version: '0.1.0', platform: 'linux', settingsRecovered: false })),
     externalUrls: new Set(['https://github.com/facebook/react']),
     liveCapabilities: vi.fn(() => ({ systemAudio: 'monitor' })),
@@ -206,8 +207,10 @@ describe('registerIpcHandlers', () => {
   it('limpar histórico só com a fila ociosa', async () => {
     const { call, services } = setup()
     expect(await call(IPC.historyClear)).toEqual(ok({ count: 2, bytes: 10 }))
+    expect(services.clearActivity).toHaveBeenCalledTimes(1)
     services.queue.isIdle.mockReturnValue(false)
     expect(await call(IPC.historyClear)).toEqual(fail('INVALID_REQUEST'))
+    expect(services.clearActivity).toHaveBeenCalledTimes(1)
   })
 
   it('modelos: status, instalar e remover (menos o que está em uso)', async () => {
