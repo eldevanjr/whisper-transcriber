@@ -1,16 +1,29 @@
 import i18next, { type i18n } from 'i18next'
 import { initReactI18next } from 'react-i18next'
 import type { UI_LANGUAGES } from '../../../shared/settings'
+import { speakerLabelsFor } from '../../../shared/speakers'
 import en from './en.json'
 import es from './es.json'
 import ptBR from './pt-BR.json'
 
 export type UiLanguage = (typeof UI_LANGUAGES)[number]
 
+/**
+ * Injeta os rótulos dos falantes (fonte única em `shared/speakers.ts`) nas traduções, para
+ * `t('live.you')`/`t('live.others')` continuarem funcionando sem duplicar as palavras no JSON.
+ */
+function withSpeakerLabels<T extends { live: Record<string, unknown> }>(
+  resource: T,
+  language: UiLanguage
+): T & { live: { you: string; others: string } } {
+  const labels = speakerLabelsFor(language)
+  return { ...resource, live: { ...resource.live, you: labels.voce, others: labels.outros } }
+}
+
 export const RESOURCES = {
-  'pt-BR': { translation: ptBR },
-  en: { translation: en },
-  es: { translation: es }
+  'pt-BR': { translation: withSpeakerLabels(ptBR, 'pt-BR') },
+  en: { translation: withSpeakerLabels(en, 'en') },
+  es: { translation: withSpeakerLabels(es, 'es') }
 } as const
 
 /** Idioma escolhido nas configurações ou, sem escolha, o do sistema (pt*, es*, senão inglês). */

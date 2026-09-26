@@ -325,8 +325,6 @@
     "defaultMic": "Predeterminado del sistema",
     "unnamedMic": "Micrófono {{n}}",
     "level": "Nivel: {{name}}",
-    "you": "Tú",
-    "others": "Otros",
     "systemAudio": "Audio del equipo (Otros)",
     "systemAudioHint": "Lo que suena en el equipo, como las voces de la llamada.",
     "systemUnavailable": "No disponible en este sistema.",

@@ -15,20 +15,23 @@ import { makeTempDir } from '../../helpers/tmp'
 
 interface FakeApp {
   calls: string[]
+  locale: string
   dock?: { hide(): void }
   disableHardwareAcceleration(): void
   setPath(name: string, path: string): void
   getVersion(): string
+  getLocale(): string
   whenReady(): Promise<void>
   quit(): void
   requestSingleInstanceLock(): boolean
   createWindow(): void
 }
 
-function makeApp(): FakeApp {
+function makeApp(locale = 'pt-BR'): FakeApp {
   const calls: string[] = []
-  return {
+  const app: FakeApp = {
     calls,
+    locale,
     disableHardwareAcceleration: () => {
       calls.push('disableHardwareAcceleration')
     },
@@ -36,6 +39,10 @@ function makeApp(): FakeApp {
       calls.push(`setPath:${name}=${path}`)
     },
     getVersion: () => '9.9.9',
+    getLocale: () => {
+      calls.push('getLocale')
+      return app.locale
+    },
     whenReady: () => {
       calls.push('whenReady')
       return Promise.resolve()
@@ -51,6 +58,7 @@ function makeApp(): FakeApp {
       calls.push('createWindow')
     }
   }
+  return app
 }
 
 interface FakeLogger {
@@ -93,9 +101,9 @@ interface Harness {
   stdout: PassThrough
 }
 
-async function harness(options: { dock?: boolean } = {}): Promise<Harness> {
+async function harness(options: { dock?: boolean; locale?: string } = {}): Promise<Harness> {
   const root = await makeTempDir()
-  const app = makeApp()
+  const app = makeApp(options.locale)
   if (options.dock) {
     app.dock = {
       hide: () => {
@@ -118,7 +126,7 @@ async function harness(options: { dock?: boolean } = {}): Promise<Harness> {
 
 let roots: string[] = []
 
-async function trackedHarness(options: { dock?: boolean } = {}): Promise<Harness> {
+async function trackedHarness(options: { dock?: boolean; locale?: string } = {}): Promise<Harness> {
   const context = await harness(options)
   roots.push(context.root)
   return context
@@ -192,6 +200,22 @@ describe('runMcp lifecycle', () => {
     await runMcp(context.deps)
     context.stdin.emit('end')
     expect(context.app.calls).toContain('quit')
+  })
+})
+
+describe('speaker labels language', () => {
+  it('follows the system locale when uiLanguage is not set', async () => {
+    const context = await trackedHarness({ locale: 'es-419' })
+    await runMcp(context.deps)
+    expect(context.app.calls).toContain('getLocale')
+  })
+
+  it('uses uiLanguage from settings without asking the system locale', async () => {
+    const context = await trackedHarness()
+    const stored = { ...DEFAULT_SETTINGS, uiLanguage: 'en' }
+    await writeFile(context.deps.paths.settings, JSON.stringify(stored), 'utf8')
+    await runMcp(context.deps)
+    expect(context.app.calls).not.toContain('getLocale')
   })
 })
 

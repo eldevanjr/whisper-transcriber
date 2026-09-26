@@ -325,8 +325,6 @@
     "defaultMic": "Padrão do sistema",
     "unnamedMic": "Microfone {{n}}",
     "level": "Nível: {{name}}",
-    "you": "Você",
-    "others": "Outros",
     "systemAudio": "Áudio do computador (Outros)",
     "systemAudioHint": "O que toca no computador, como as vozes da chamada.",
     "systemUnavailable": "Não disponível neste sistema.",

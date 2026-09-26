@@ -7,7 +7,7 @@ import type electronLog from 'electron-log/main'
 import { AppError } from '../../shared/errors'
 import type { ActivitySnapshot } from '../../shared/mcp'
 import { DEFAULT_SETTINGS, SettingsSchema, type Settings } from '../../shared/settings'
-import type { SpeakerLabels } from '../../shared/format'
+import { resolveSpeakerLabels } from '../../shared/speakers'
 import { readJson } from '../fs-utils'
 import { HistoryStore } from '../history/store'
 import type { AppPaths } from '../paths'
@@ -18,7 +18,13 @@ import { createMcpServer, type BridgePort } from './server'
 /** Só o que o processo MCP usa do `app` do Electron (spec §5.2). */
 export type McpApp = Pick<
   App,
-  'disableHardwareAcceleration' | 'dock' | 'setPath' | 'getVersion' | 'whenReady' | 'quit'
+  | 'disableHardwareAcceleration'
+  | 'dock'
+  | 'setPath'
+  | 'getVersion'
+  | 'getLocale'
+  | 'whenReady'
+  | 'quit'
 >
 
 /** O electron-log de produção; os testes passam um dublê (console desligado, só arquivo). */
@@ -34,8 +40,6 @@ export interface McpDeps {
 
 /** Tamanho máximo de `logs/mcp.log` (spec §12). */
 const LOG_MAX_BYTES = 1024 * 1024
-
-const SPEAKER_LABELS: SpeakerLabels = { voce: 'Você', outros: 'Outros' }
 
 /** Retrato de app fechado; a ponte real é a Task 7. */
 const CLOSED_APP: ActivitySnapshot = {
@@ -88,10 +92,17 @@ export async function runMcp(deps: McpDeps): Promise<void> {
   logger.transports.console.level = false
   logger.info(`[mcp] iniciando (versão ${app.getVersion()})`)
   await app.whenReady()
+  const readSettings = readSettingsFrom(paths.settings)
+  const settings = await readSettings()
+  // Rótulos do ao vivo no idioma da interface; sem escolha, o locale do sistema (pt→pt-BR etc.).
+  const labels =
+    settings.uiLanguage === null
+      ? resolveSpeakerLabels(null, app.getLocale())
+      : resolveSpeakerLabels(settings.uiLanguage)
   const server = createMcpServer({
-    library: new TranscriptLibrary(new HistoryStore(paths.history), SPEAKER_LABELS),
+    library: new TranscriptLibrary(new HistoryStore(paths.history), labels),
     activity: new ActivityLog(paths.mcpActivity),
-    readSettings: readSettingsFrom(paths.settings),
+    readSettings,
     bridge: closedAppBridge,
     version: app.getVersion()
   })
