@@ -1,5 +1,4 @@
-import type { ErrorCode } from '../../../shared/errors'
-import type { McpClientId } from '../../../shared/mcp'
+import type { ClientState, ClientStatus, ClientStatusError, McpClientId } from '../../../shared/mcp'
 import { createClaudeCodeConnector } from './claude-code'
 import { createClaudeDesktopConnector } from './claude-desktop'
 import type { Cli } from './cli'
@@ -10,15 +9,7 @@ import { createOpenCodeConnector } from './opencode'
 import { createVscodeConnector } from './vscode'
 import { createWindsurfConnector } from './windsurf'
 
-/** Três estados de um cliente no menu (spec §11.1). */
-export type ClientState = 'missing' | 'found' | 'connected'
-
-/** Erro/aviso mostrado no cartão; `code` ausente é um alerta (ex.: config antiga). */
-export interface ClientStatusError {
-  code?: ErrorCode
-  message: string
-  detail?: string
-}
+export type { ClientState, ClientStatus, ClientStatusError }
 
 export interface ClientStateInfo {
   state: ClientState
@@ -55,15 +46,6 @@ export interface ConnectorDeps {
   env: NodeJS.ProcessEnv
   launcherPath: string
   cli: Cli
-}
-
-export interface ClientStatus {
-  id: McpClientId
-  name: string
-  state: ClientState
-  lastUsedAt: string | null
-  restartNeeded: boolean
-  error?: ClientStatusError
 }
 
 export interface ListClientsDeps extends ConnectorDeps {

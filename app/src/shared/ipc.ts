@@ -11,6 +11,7 @@ import type {
   UpdateInfo
 } from './events'
 import type { HistoryList, HistoryMeta, StorageStats, TranscriptEntry } from './history'
+import type { ClientStatus, McpActivityLine, McpClientId } from './mcp'
 import type { ModelFormat, ModelId } from './models'
 import type { Settings, SettingsPatch, Track } from './settings'
 
@@ -53,7 +54,12 @@ export const IPC = {
   liveResume: 'live:resume',
   liveCapabilities: 'live:capabilities',
   liveMonitorVolume: 'live:monitor-volume',
-  liveSetMonitorVolume: 'live:set-monitor-volume'
+  liveSetMonitorVolume: 'live:set-monitor-volume',
+  mcpStatus: 'mcp:status',
+  mcpConnect: 'mcp:connect',
+  mcpDisconnect: 'mcp:disconnect',
+  mcpTest: 'mcp:test',
+  mcpActivity: 'mcp:activity'
 } as const
 
 export const EVENTS = {
@@ -121,6 +127,20 @@ export interface AppInfo {
   version: string
   platform: string
   settingsRecovered: boolean
+}
+
+/** Retrato da seção de IAs (spec §10.2). */
+export interface McpStatus {
+  launcherOk: boolean
+  launcherPath: string
+  bridgeOk: boolean
+  clients: ClientStatus[]
+}
+
+/** Resultado do "Testar conexão" (spec §10.2). */
+export interface McpTestResult {
+  ok: true
+  tools: number
 }
 
 export interface RetryInput {
@@ -200,4 +220,10 @@ export interface TranscriberApi {
     sendAudio(track: Track, seq: number, pcm: Int16Array): void
     onEvent(callback: (event: LiveEvent) => void): Unsubscribe
   }
+  /** Seção "IAs (MCP)" (spec §10.2). */
+  mcpStatus(): Promise<McpStatus>
+  mcpConnect(id: McpClientId): Promise<ClientStatus>
+  mcpDisconnect(id: McpClientId): Promise<ClientStatus>
+  mcpTest(): Promise<McpTestResult>
+  mcpActivity(): Promise<McpActivityLine[]>
 }

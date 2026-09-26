@@ -19,8 +19,10 @@ import log from 'electron-log/main'
 import manifestJson from '../../resources/downloads-manifest.json'
 import licensesJson from '../../resources/third-party-licenses.json'
 import { licenseUrls } from '../shared/app-info'
+import { AppError } from '../shared/errors'
 import { EVENTS } from '../shared/ipc'
 import { AUDIO_EXTENSIONS, VIDEO_EXTENSIONS } from '../shared/media'
+import type { ClientStatus, McpClientId } from '../shared/mcp'
 import { readDevOverrides } from './dev-overrides'
 import { Installer } from './downloads/installer'
 import { parseManifest } from './downloads/manifest'
@@ -37,8 +39,12 @@ import {
 import { createMediaHandler, MEDIA_SCHEME } from './media-protocol'
 import { isMcpMode, runMcp } from './mcp/entry'
 import { ActivityTracker } from './mcp/activity-tracker'
+import { ActivityLog } from './mcp/activity'
 import { startBridgeServer } from './mcp/bridge-server'
-import { launcherTarget, writeLauncher } from './mcp/launcher'
+import { createCli } from './mcp/clients/cli'
+import { createConnectors, listClients, type ConnectorDeps } from './mcp/clients/registry'
+import { launcherStatus, launcherTarget, writeLauncher } from './mcp/launcher'
+import { runSelfTest } from './mcp/self-test'
 import { appPaths, modelDir } from './paths'
 import { TranscriptionQueue } from './queue/queue'
 import { applyCsp, isAllowedExternalUrl, isAllowedNavigation, isTrustedSender } from './security'
@@ -200,6 +206,15 @@ async function main(): Promise<void> {
     logger.error(`[mcp] não foi possível subir a ponte: ${String(error)}`)
     return { address: '', close: () => Promise.resolve() }
   })
+  const mcpHome = app.getPath('home')
+  const connectorDeps: ConnectorDeps = {
+    platform: process.platform,
+    home: mcpHome,
+    env: process.env,
+    launcherPath: paths.mcpLauncher,
+    cli: createCli({ platform: process.platform, home: mcpHome, env: process.env })
+  }
+  const activityLog = new ActivityLog(paths.mcpActivity)
 
   protocol.handle(MEDIA_SCHEME, createMediaHandler({ history }))
   applyCsp(session.defaultSession)
@@ -267,6 +282,18 @@ async function main(): Promise<void> {
     clearActivity: () => rm(paths.mcpActivity, { force: true }),
     externalUrls: licenseUrls(licensesJson),
     live,
+    mcp: {
+      status: async () => ({
+        launcherOk: launcherStatus().ok,
+        launcherPath: paths.mcpLauncher,
+        bridgeOk: bridgeServer.address !== '',
+        clients: await listClients({ ...connectorDeps, activity: activityLog })
+      }),
+      connect: (id) => runConnectorAction(connectorDeps, activityLog, id, 'connect'),
+      disconnect: (id) => runConnectorAction(connectorDeps, activityLog, id, 'disconnect'),
+      test: () => runSelfTest(paths.mcpLauncher),
+      activity: () => activityLog.recent()
+    },
     liveCapabilities: () => ({ systemAudio: systemAudioSupport(process.platform, release()) }),
     monitorVolume: createMonitorVolume({
       platform: process.platform,
@@ -337,6 +364,21 @@ async function main(): Promise<void> {
   app.on('window-all-closed', () => {
     app.quit()
   })
+}
+
+/** Conecta/desconecta uma IA e devolve o retrato atualizado dela (spec §10.2). */
+async function runConnectorAction(
+  deps: ConnectorDeps,
+  activity: ActivityLog,
+  id: McpClientId,
+  action: 'connect' | 'disconnect'
+): Promise<ClientStatus> {
+  const connector = createConnectors(deps).find((item) => item.id === id)
+  if (!connector) throw new AppError('INVALID_REQUEST', 'IA desconhecida')
+  await connector[action]()
+  const status = (await listClients({ ...deps, activity })).find((item) => item.id === id)
+  if (!status) throw new AppError('INVALID_REQUEST', 'IA desconhecida')
+  return status
 }
 
 /** Modo MCP (argv `--mcp`): desvia antes do `main()`, sem single-instance lock (spec §5.2). */

@@ -35,6 +35,26 @@ export function clientDisplayName(id: string): string {
   return MCP_CLIENT_NAME_BY_ID.get(id) ?? id
 }
 
+/** Três estados de um cliente no menu (spec §11.1). */
+export type ClientState = 'missing' | 'found' | 'connected'
+
+/** Erro/aviso mostrado no cartão; `code` ausente é um alerta (ex.: config antiga). */
+export interface ClientStatusError {
+  code?: ErrorCode
+  message: string
+  detail?: string
+}
+
+/** Retrato de um cliente para a tela (spec §10.2). */
+export interface ClientStatus {
+  id: McpClientId
+  name: string
+  state: ClientState
+  lastUsedAt: string | null
+  restartNeeded: boolean
+  error?: ClientStatusError
+}
+
 /** Refazer do ao vivo: qual faixa está sendo transcrita (uma depois da outra). */
 export const TrackPassSchema = z.object({
   track: z.enum(TRACKS),
