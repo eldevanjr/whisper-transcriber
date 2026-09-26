@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { AppError, toAppError } from '../../shared/errors'
 import type { SystemInfo, UpdateInfo } from '../../shared/events'
 import { isJobId, type HistoryMeta } from '../../shared/history'
+import { sanitizeFileName } from '../../shared/media'
 import {
   IPC,
   SEND,
@@ -104,14 +105,7 @@ type On = <S extends z.ZodType>(
   run: (arg: z.output<S>) => unknown
 ) => void
 
-export function sanitizeFileName(name: string): string {
-  // Troca separadores de pasta, caracteres proibidos no Windows e caracteres de controle.
-  const cleaned = name
-    .replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_')
-    .trim()
-    .slice(0, 200)
-  return cleaned === '' ? 'transcricao.txt' : cleaned
-}
+export { sanitizeFileName }
 
 async function invoke<S extends z.ZodType>(
   trusted: boolean,

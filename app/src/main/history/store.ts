@@ -192,6 +192,18 @@ export class HistoryStore {
     return meta.kind === 'live' && (await pathExists(this.paths(meta.id).transcript))
   }
 
+  /**
+   * Uma versão específica do ao vivo: `live` é a feita na hora (ou o parcial), `redo` é a refeita.
+   * Sem refeita (`transcript.json`), `redo` é NOT_FOUND — nunca cai no parcial.
+   */
+  async readVersion(meta: HistoryMeta, version: 'live' | 'redo'): Promise<TranscriptEntry[]> {
+    if (version === 'live') return this.readOrPartial(this.paths(meta.id).live, meta.id)
+    if (!(await this.hasRedo(meta))) {
+      throw new AppError('NOT_FOUND', 'Transcrição não encontrada', meta.id)
+    }
+    return this.readOrPartial(this.paths(meta.id).transcript, meta.id)
+  }
+
   /** Sem transcript.json (job em andamento ou interrompido), devolve o que já está no parcial. */
   async readTranscript(id: string): Promise<TranscriptEntry[]> {
     return this.readOrPartial(this.paths(id).transcript, id)
