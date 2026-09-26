@@ -1,4 +1,4 @@
-import { readFile, rm, stat, utimes, writeFile } from 'node:fs/promises'
+import { chmod, readFile, rm, stat, utimes, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { launcherStatus, launcherTarget, writeLauncher } from '../../../src/main/mcp/launcher'
@@ -55,12 +55,17 @@ describe('launcherTarget', () => {
     )
   })
 
-  it('desenvolvimento usa o Electron do projeto + out/main/index.js', () => {
+  it('desenvolvimento usa o Electron do projeto + o diretório do app', () => {
     const appPath = '/repo/app'
     expect(launcherTarget({ ...base, isPackaged: false, platform: 'linux', appPath })).toEqual({
       command: join(appPath, 'node_modules', 'electron', 'dist', 'electron'),
-      args: [join(appPath, 'out', 'main', 'index.js')]
+      args: [appPath]
     })
+    // O argumento tem que ser o diretório de package.json; `out/main/index.js` faria o Electron
+    // usar outro app/userData (spec §6: o processo MCP lê os dados do app de verdade).
+    expect(launcherTarget({ ...base, isPackaged: false, platform: 'linux', appPath }).args).toEqual([
+      appPath
+    ])
     expect(
       launcherTarget({ ...base, isPackaged: false, platform: 'win32', appPath }).command
     ).toBe(join(appPath, 'node_modules', 'electron', 'dist', 'electron.exe'))
@@ -78,6 +83,12 @@ describe('launcherTarget', () => {
         'Electron'
       )
     )
+  })
+})
+
+describe('launcherStatus', () => {
+  it('começa sem erro, para a tela não piscar "Com problema" antes da 1ª gravação', () => {
+    expect(launcherStatus()).toEqual({ ok: true, error: null })
   })
 })
 
@@ -143,6 +154,33 @@ describe('writeLauncher', () => {
     await writeLauncher(paths, target, 'linux')
     expect((await stat(paths.mcpLauncher)).mtimeMs).toBe(1_000_000_000_000)
   })
+
+  it('Windows: conteúdo igual também não regrava', async () => {
+    const paths = appPaths(root, 'win32')
+    const target = { command: 'C:\\app.exe', args: [] }
+    await writeLauncher(paths, target, 'win32')
+    const past = new Date(1_000_000_000_000)
+    await utimes(paths.mcpLauncher, past, past)
+    await writeLauncher(paths, target, 'win32')
+    expect((await stat(paths.mcpLauncher)).mtimeMs).toBe(1_000_000_000_000)
+  })
+
+  it.skipIf(process.platform === 'win32')(
+    'restaura o modo 0755 quando o conteúdo é igual (sem mexer no mtime)',
+    async () => {
+      const paths = appPaths(root, 'linux')
+      const target = { command: EXEC, args: [] }
+      await writeLauncher(paths, target, 'linux')
+      const past = new Date(1_000_000_000_000)
+      await utimes(paths.mcpLauncher, past, past)
+      await chmod(paths.mcpLauncher, 0o644)
+      await writeLauncher(paths, target, 'linux')
+      const stats = await stat(paths.mcpLauncher)
+      expect(stats.mode & 0o777).toBe(0o755)
+      expect(stats.mtimeMs).toBe(1_000_000_000_000)
+      expect(launcherStatus()).toEqual({ ok: true, error: null })
+    }
+  )
 
   it('regrava quando o conteúdo muda', async () => {
     const paths = appPaths(root, 'linux')
