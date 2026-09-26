@@ -11,8 +11,10 @@ test('ao vivo: testa, grava, encerra, refaz com o áudio completo e escolhe a ve
 
   // O medidor mexe antes de começar: a captura (AudioWorklet) está de pé.
   const meter = page.getByRole('meter', { name: 'Nível: Você' })
+  // O microfone falso bipa a cada 500 ms (nível quase zero entre os bipes): ler a cada bloco de
+  // 100 ms, senão a leitura de 1 em 1 s pode travar sempre na fase do silêncio.
   await expect
-    .poll(async () => Number(await meter.getAttribute('aria-valuenow')))
+    .poll(async () => Number(await meter.getAttribute('aria-valuenow')), { intervals: [100] })
     .toBeGreaterThan(0)
 
   await page.getByRole('button', { name: 'Testar' }).click()
