@@ -7,21 +7,28 @@ import numpy as np
 import pytest
 
 from tests.fakes import FakeCppModel
+from transcriber_worker.audio import decode_pcm16k
 from transcriber_worker.errors import ErrorCode, WorkerError
 from transcriber_worker.events import Event
 from transcriber_worker.protocol import Device
 from transcriber_worker.whispercpp import (
     PyWhisperCppModel,
     find_ggml_model,
+    find_speech_silero,
     local_cpp_factory,
     run_whispercpp,
 )
 
 SECONDS = 6.0
+FIXTURE = Path(__file__).parent / "fixtures" / "fala-curta.wav"
 
 
 def _audio(_path: str) -> Any:
     return np.zeros(int(16000 * SECONDS), dtype=np.float32)
+
+
+def _whole(audio: Any) -> list[dict[str, int]]:
+    return [{"start": 0, "end": len(audio)}]
 
 
 class Clock:
@@ -37,7 +44,14 @@ def test_run_emits_segments_progress_and_detected_language() -> None:
     model = FakeCppModel([(0.0, 2.0, "  Olá  "), (2.0, 2.5, "   "), (2.5, 4.0, "mundo")])
     events: list[Event] = []
     result = run_whispercpp(
-        model, "/v.mp4", None, "job", events.append, decode=_audio, clock=Clock(1.0)
+        model,
+        "/v.mp4",
+        None,
+        "job",
+        events.append,
+        decode=_audio,
+        find_speech=_whole,
+        clock=Clock(1.0),
     )
     segments = [e for e in events if e["type"] == "segment"]
     assert [(s["index"], s["text"]) for s in segments] == [(0, "Olá"), (1, "mundo")]
@@ -54,18 +68,68 @@ def test_run_throttles_progress_and_keeps_fixed_language() -> None:
     model = FakeCppModel([(0, 1, "a"), (1, 2, "b"), (2, 3, "c")], detected="en")
     events: list[Event] = []
     result = run_whispercpp(
-        model, "/v", "pt", "j", events.append, decode=_audio, clock=Clock(0.1), interval=0.25
+        model,
+        "/v",
+        "pt",
+        "j",
+        events.append,
+        decode=_audio,
+        find_speech=_whole,
+        clock=Clock(0.1),
+        interval=0.25,
     )
     assert len([e for e in events if e["type"] == "progress"]) == 2  # primeiro + final
     assert result.language_detected == "pt"
     assert model.calls[0][1] == "pt"
 
 
-def test_run_accepts_vad_flag_for_compatibility() -> None:
+def test_run_skips_the_model_when_vad_finds_no_speech() -> None:
+    # Faixa muda (ex.: microfone sem fala na reunião): sem VAD o Whisper inventava "E aí" a
+    # cada janela de 30 s.
+    model = FakeCppModel([(0.0, 30.0, "E aí")])
+    events: list[Event] = []
     result = run_whispercpp(
-        FakeCppModel([]), "/v", "en", "j", lambda _: None, decode=_audio, vad_filter=False
+        model, "/v", "pt", "j", events.append, decode=_audio, find_speech=lambda _a: []
     )
+    assert model.calls == []
+    assert [e for e in events if e["type"] == "segment"] == []
+    assert [e for e in events if e["type"] == "progress"][-1]["pct"] == 100.0
     assert result.segment_count == 0
+    assert result.duration == SECONDS
+    assert result.language_detected == "pt"
+
+
+def test_run_sends_only_speech_and_restores_original_times() -> None:
+    # Fala em 1 a 2 s e 4 a 5 s: o modelo recebe 2 s de áudio; os tempos voltam para o original.
+    def speech(_audio: Any) -> list[dict[str, int]]:
+        return [{"start": 16000, "end": 32000}, {"start": 64000, "end": 80000}]
+
+    model = FakeCppModel([(0.0, 0.8, "um"), (1.2, 2.0, "dois")])
+    events: list[Event] = []
+    run_whispercpp(model, "/v", None, "j", events.append, decode=_audio, find_speech=speech)
+    assert model.calls == [(32000, None)]
+    segments = [(s["start"], s["end"], s["text"]) for s in events if s["type"] == "segment"]
+    assert segments == [(1.0, 1.8, "um"), (4.2, 5.0, "dois")]
+
+
+def test_run_without_vad_sends_the_whole_audio() -> None:
+    def fail(_audio: Any) -> list[dict[str, int]]:
+        raise AssertionError("VAD não deveria rodar")
+
+    model = FakeCppModel([(2.5, 3.0, "hi")])
+    events: list[Event] = []
+    run_whispercpp(
+        model, "/v", "en", "j", events.append, decode=_audio, vad_filter=False, find_speech=fail
+    )
+    assert model.calls == [(int(16000 * SECONDS), "en")]
+    assert [(e["start"], e["end"]) for e in events if e["type"] == "segment"] == [(2.5, 3.0)]
+
+
+def test_silero_finds_speech_only_where_someone_talks() -> None:
+    assert find_speech_silero(np.zeros(16000 * 5, dtype=np.float32)) == []
+    speech = find_speech_silero(decode_pcm16k(str(FIXTURE)))
+    assert speech
+    assert all(c["start"] < c["end"] for c in speech)
 
 
 def test_find_ggml_model_in_folder_or_direct_file(tmp_path: Path) -> None:

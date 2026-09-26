@@ -174,7 +174,11 @@ def test_transcribe_delegates_to_the_loaded_engine() -> None:
         factory=lambda *_: FakeModel([seg(0, 1, "fw")], duration=1.0),
         cpp_factory=CppFactorySpy(),
         prepare=lambda _: None,
-        transcribe_cpp=partial(run_whispercpp, decode=lambda _: np.zeros(16000, np.float32)),
+        transcribe_cpp=partial(
+            run_whispercpp,
+            decode=lambda _: np.zeros(16000, np.float32),
+            find_speech=lambda audio: [{"start": 0, "end": len(audio)}],
+        ),
     )
     texts: list[str] = []
 
