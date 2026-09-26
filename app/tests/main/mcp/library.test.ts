@@ -499,6 +499,39 @@ describe('TranscriptLibrary.segmentsAfter', () => {
     expect(second.next).toBe(2)
   })
 
+  it('não repete nem pula quando um trecho menor é anexado depois', async () => {
+    const { store, library } = ctx
+    const meta = await store.create({ ...JOB, sourcePath: '/v/fora-de-ordem.mp4' })
+    await store.appendSegment(meta.id, { start: 5, end: 6, text: 'cinco' })
+    const first = await library.segmentsAfter(meta.id, 0)
+    expect(first.segments.map((s) => s.texto)).toEqual(['cinco'])
+    expect(first.next).toBe(1)
+    // Refazer de ao vivo pode anexar uma faixa com início menor depois da anterior.
+    await store.appendSegment(meta.id, { start: 1, end: 2, text: 'um' })
+    const second = await library.segmentsAfter(meta.id, first.next)
+    expect(second.segments.map((s) => s.texto)).toEqual(['um'])
+    expect(second.next).toBe(2)
+    expect([...first.segments, ...second.segments].map((s) => s.texto)).toEqual(['cinco', 'um'])
+  })
+
+  it('depois de finalizar o índice continua coerente na ordem de anexação', async () => {
+    const { store, library } = ctx
+    const meta = await store.create({ ...JOB, sourcePath: '/v/ordem.mp4' })
+    await store.appendSegment(meta.id, { start: 0, end: 1, text: 'um' })
+    await store.appendSegment(meta.id, { start: 1, end: 2, text: 'dois' })
+    const growing = await library.segmentsAfter(meta.id, 0)
+    expect(growing.next).toBe(2)
+    await store.finalize(meta.id)
+    await store.update(meta.id, { status: 'done' })
+    const after = await library.segmentsAfter(meta.id, growing.next)
+    expect(after.segments).toEqual([])
+    expect(after.next).toBe(2)
+    expect((await library.segmentsAfter(meta.id, 0)).segments.map((s) => s.texto)).toEqual([
+      'um',
+      'dois'
+    ])
+  })
+
   it('after negativo vira 0', async () => {
     const { store, library } = ctx
     const meta = await store.create({ ...JOB, sourcePath: '/v/neg.mp4' })

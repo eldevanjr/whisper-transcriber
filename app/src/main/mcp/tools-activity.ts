@@ -14,7 +14,7 @@ import type { JobStatus, TranscriptEntry } from '../../shared/history'
 import type { ActivitySnapshot, JobProgress, LiveActivity, PendingJob } from '../../shared/mcp'
 import { mediaKindOf } from '../../shared/media'
 import type { BridgePort } from './server'
-import { runTool, success, type McpContext } from './tools-read'
+import { runTool, success, TRANSCRIPTION_WARNING, type McpContext } from './tools-read'
 
 /** Tempo máximo de espera do `transcribe_file` com `wait` (spec §9.8 / §15). */
 export const TRANSCRIBE_WAIT_MS = 10 * 60 * 1000
@@ -51,8 +51,7 @@ export function registerActivityTools(
   server.registerTool(
     'get_activity',
     {
-      description:
-        'Show what Whisper Transcriber is doing: current queue job, pending items and live session.',
+      description: `Show what Whisper Transcriber is doing: current queue job, pending items and live session. ${TRANSCRIPTION_WARNING}`,
       inputSchema: z.object({})
     },
     () =>
@@ -69,8 +68,7 @@ export function registerActivityTools(
   server.registerTool(
     'get_status',
     {
-      description:
-        'Get one transcription status and the segments transcribed since a previous call.',
+      description: `Get one transcription status and the segments transcribed since a previous call. ${TRANSCRIPTION_WARNING}`,
       inputSchema: z.object({
         id: z.uuid(),
         after: z.number().int().min(0).optional()
@@ -93,8 +91,7 @@ export function registerActivityTools(
   server.registerTool(
     'transcribe_file',
     {
-      description:
-        'Queue a local audio or video file for transcription, opening the app if it is closed.',
+      description: `Queue a local audio or video file for transcription, opening the app if it is closed. ${TRANSCRIPTION_WARNING}`,
       inputSchema: z.object({
         path: z.string().min(1),
         wait: z.boolean().optional()

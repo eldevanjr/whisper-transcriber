@@ -165,15 +165,26 @@ export class TranscriptLibrary {
     }
   }
 
-  /** Trechos já prontos, sem repetir nem pular enquanto o parcial cresce (spec §9.7). */
+  /**
+   * Trechos já prontos, sem repetir nem pular enquanto o parcial cresce (spec §9.7). `after` é a
+   * contagem de trechos já vistos, então a ordem tem que ser a de anexação no disco (nunca
+   * reordenar): no arquivo a transcrição é escrita em ordem crescente de início e cada chamada
+   * devolve o sufixo novo. O transcript final já é gravado ordenado, então o índice segue
+   * coerente ao finalizar.
+   *
+   * Limitação conhecida: no refazer de uma sessão ao vivo com várias faixas, a fila anexa faixa
+   * por faixa (ordem de anexação) e o `finalize` grava ordenado por início; um cursor pego
+   * durante o parcial desse refazer pode não ser estável na virada para o final.
+   */
   async segmentsAfter(
     id: string,
     after: number
   ): Promise<{ segments: TranscriptEntry[]; next: number }> {
     const meta = await this.history.get(id)
-    const entries = sortByStart(await this.history.readActive(meta))
+    const entries = await this.history.readActive(meta)
     const start = Math.max(0, Math.floor(after))
-    return { segments: entries.slice(start), next: entries.length }
+    const segments = entries.slice(start)
+    return { segments, next: start + segments.length }
   }
 
   async audio(id: string, track: AudioTrack): Promise<AudioResult> {

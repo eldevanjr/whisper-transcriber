@@ -129,10 +129,15 @@ async function harness(
     tracker?: ActivityTracker
     queue?: BridgeQueue
     processing?: boolean
+    staleSocket?: boolean
   } = {}
 ): Promise<Harness> {
   const root = await makeTempDir()
   const paths = appPaths(root)
+  if (options.staleSocket) {
+    await mkdir(paths.mcpDir, { recursive: true })
+    await writeFile(paths.mcpBridgeSocket, 'stale')
+  }
   const tracker = options.tracker ?? new ActivityTracker()
   const enqueued: Harness['enqueued'] = []
   const queue: BridgeQueue = options.queue ?? {
@@ -380,6 +385,16 @@ describe('bridge server limits', () => {
     expect((await stat(context.paths.mcpBridgeInfo)).mode & 0o777).toBe(0o600)
     await context.server.close()
     await expect(stat(context.paths.mcpBridgeInfo)).rejects.toThrow()
+  })
+
+  it('replaces a stale unix socket left by an unclean exit', async () => {
+    const context = await trackedHarness({ staleSocket: true })
+    const conn = await Conn.open(context.server.address)
+    conn.send({ type: 'auth', rid: 1, token: context.token })
+    expect(await conn.next()).toMatchObject({ type: 'ok' })
+    conn.send({ type: 'ping', rid: 2 })
+    expect(await conn.next()).toMatchObject({ type: 'ok', data: { ready: true } })
+    conn.end()
   })
 })
 

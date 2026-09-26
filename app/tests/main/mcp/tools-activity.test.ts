@@ -9,6 +9,7 @@ import { HistoryStore } from '../../../src/main/history/store'
 import { ActivityLog } from '../../../src/main/mcp/activity'
 import { TranscriptLibrary } from '../../../src/main/mcp/library'
 import { createMcpServer, type BridgePort } from '../../../src/main/mcp/server'
+import { TRANSCRIPTION_WARNING } from '../../../src/main/mcp/tools-read'
 import { AppError } from '../../../src/shared/errors'
 import type { ActivitySnapshot, JobProgress } from '../../../src/shared/mcp'
 import { DEFAULT_SETTINGS } from '../../../src/shared/settings'
@@ -150,6 +151,17 @@ afterEach(async () => {
   await Promise.all(openContexts.map((ctx) => ctx.server.close()))
   await Promise.all(openContexts.map((ctx) => rm(ctx.root, { recursive: true, force: true })))
   await Promise.all(extras.map((dir) => rm(dir, { recursive: true, force: true })))
+})
+
+describe('activity tool descriptions', () => {
+  it('carry the transcription warning on all three tools', async () => {
+    const ctx = await tracked(async () => ({ bridge: fakeBridge() }))
+    const { tools } = await ctx.client.listTools()
+    for (const name of ['get_activity', 'get_status', 'transcribe_file']) {
+      const tool = tools.find((candidate) => candidate.name === name)
+      expect(tool?.description).toContain(TRANSCRIPTION_WARNING)
+    }
+  })
 })
 
 describe('get_activity', () => {
@@ -324,6 +336,26 @@ describe('get_status', () => {
     const data = result.structuredContent!
     expect(data).toMatchObject({ status: 'queued', segments: [], next_after: 0, done: false })
     expect(data).not.toHaveProperty('phase')
+  })
+
+  it('never repeats nor skips when the partial grows out of order', async () => {
+    const ctx = await tracked(async (store) => {
+      const meta = await store.create({ ...JOB, sourcePath: '/v/oo.mp4' })
+      await store.appendSegment(meta.id, { start: 5, end: 6, text: 'cinco' })
+      return { bridge: fakeBridge() }
+    })
+    const id = (await ctx.store.list()).entries[0]!.id
+    const first = await call(ctx, 'get_status', { id, after: 0 })
+    expect(first.structuredContent).toMatchObject({
+      next_after: 1,
+      segments: [{ start: 5, end: 6, text: 'cinco' }]
+    })
+    await ctx.store.appendSegment(id, { start: 1, end: 2, text: 'um' })
+    const second = await call(ctx, 'get_status', { id, after: 1 })
+    expect(second.structuredContent).toMatchObject({
+      next_after: 2,
+      segments: [{ start: 1, end: 2, text: 'um' }]
+    })
   })
 
   it('reports a missing item as NOT_FOUND', async () => {

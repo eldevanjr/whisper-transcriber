@@ -72,6 +72,10 @@ export async function startBridgeServer(deps: BridgeServerDeps): Promise<BridgeS
   })
   const token = randomBytes(32).toString('base64url')
   await ensureSocketDir(address, deps.platform)
+  // Uma saída suja deixa o socket Unix para trás e o listen falharia com EADDRINUSE. Como só o
+  // app (single-instance) sobe a ponte, o endereço é nosso: limpa antes de reabrir. No Windows o
+  // named pipe não tem arquivo, então nada é removido.
+  await removeSocket(address, deps.platform)
   const context: ServerContext = {
     token,
     version: deps.version,
