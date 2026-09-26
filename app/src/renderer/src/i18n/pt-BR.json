@@ -14,7 +14,8 @@
     "remove": "Remover",
     "retry": "Tentar de novo",
     "search": "Buscar",
-    "dismiss": "Dispensar aviso"
+    "dismiss": "Dispensar aviso",
+    "viaClient": "via {{client}}"
   },
   "errors": {
     "INVALID_MESSAGE": "O motor recebeu um pedido inválido.",

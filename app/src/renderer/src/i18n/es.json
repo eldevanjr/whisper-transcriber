@@ -14,7 +14,8 @@
     "remove": "Quitar",
     "retry": "Reintentar",
     "search": "Buscar",
-    "dismiss": "Descartar aviso"
+    "dismiss": "Descartar aviso",
+    "viaClient": "vía {{client}}"
   },
   "errors": {
     "INVALID_MESSAGE": "El motor recibió una solicitud no válida.",

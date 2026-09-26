@@ -14,7 +14,8 @@
     "remove": "Remove",
     "retry": "Try again",
     "search": "Search",
-    "dismiss": "Dismiss notice"
+    "dismiss": "Dismiss notice",
+    "viaClient": "via {{client}}"
   },
   "errors": {
     "INVALID_MESSAGE": "The engine received an invalid request.",

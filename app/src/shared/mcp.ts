@@ -16,6 +16,25 @@ export const MCP_CLIENT_IDS = [
 ] as const
 export type McpClientId = (typeof MCP_CLIENT_IDS)[number]
 
+/** Nome amigável de cada cliente MCP (spec §11.3); marcas, então não se traduzem. */
+export const MCP_CLIENT_NAMES: Record<McpClientId, string> = {
+  'claude-code': 'Claude Code',
+  'claude-desktop': 'Claude Desktop',
+  codex: 'Codex',
+  opencode: 'OpenCode',
+  cursor: 'Cursor',
+  vscode: 'VS Code',
+  'gemini-cli': 'Gemini CLI',
+  windsurf: 'Windsurf'
+}
+
+const MCP_CLIENT_NAME_BY_ID = new Map<string, string>(Object.entries(MCP_CLIENT_NAMES))
+
+/** Nome de exibição do cliente pelo id; id desconhecido volta como veio (spec §11.3). */
+export function clientDisplayName(id: string): string {
+  return MCP_CLIENT_NAME_BY_ID.get(id) ?? id
+}
+
 /** Refazer do ao vivo: qual faixa está sendo transcrita (uma depois da outra). */
 export const TrackPassSchema = z.object({
   track: z.enum(TRACKS),

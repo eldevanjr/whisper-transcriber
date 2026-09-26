@@ -5,7 +5,9 @@ import {
   BridgeResponseSchema,
   JobProgressSchema,
   MCP_CLIENT_IDS,
-  McpActivityLineSchema
+  MCP_CLIENT_NAMES,
+  McpActivityLineSchema,
+  clientDisplayName
 } from '../../src/shared/mcp'
 
 const JOB_ID = '3f1c2a4e-8b7d-4c6a-9e2f-1a2b3c4d5e6f'
@@ -22,6 +24,27 @@ describe('ids dos clientes MCP', () => {
       'gemini-cli',
       'windsurf'
     ])
+  })
+})
+
+describe('nome de exibição dos clientes MCP', () => {
+  it('mapeia cada id para o nome amigável, sem traduzir as marcas', () => {
+    expect(MCP_CLIENT_NAMES).toEqual({
+      'claude-code': 'Claude Code',
+      'claude-desktop': 'Claude Desktop',
+      codex: 'Codex',
+      opencode: 'OpenCode',
+      cursor: 'Cursor',
+      vscode: 'VS Code',
+      'gemini-cli': 'Gemini CLI',
+      windsurf: 'Windsurf'
+    })
+    expect(clientDisplayName('claude-code')).toBe('Claude Code')
+    expect(clientDisplayName('vscode')).toBe('VS Code')
+  })
+
+  it('id desconhecido volta como veio', () => {
+    expect(clientDisplayName('minha-ia')).toBe('minha-ia')
   })
 })
 
@@ -45,9 +68,9 @@ describe('requisições da ponte', () => {
     expect(
       BridgeRequestSchema.safeParse({ type: 'transcribe', rid: 6, path: '', client: 'x' }).success
     ).toBe(false)
-    expect(BridgeRequestSchema.safeParse({ type: 'status', rid: 7, id: '../../etc/passwd' }).success).toBe(
-      false
-    )
+    expect(
+      BridgeRequestSchema.safeParse({ type: 'status', rid: 7, id: '../../etc/passwd' }).success
+    ).toBe(false)
     expect(BridgeRequestSchema.safeParse({ type: 'status', rid: 8, id: 42 }).success).toBe(false)
   })
 })
@@ -76,8 +99,11 @@ describe('respostas da ponte', () => {
   it('rejeita type desconhecido e código desconhecido', () => {
     expect(BridgeResponseSchema.safeParse({ type: 'nope', rid: 1 }).success).toBe(false)
     expect(
-      BridgeResponseSchema.safeParse({ type: 'error', rid: 1, error: { code: 'NOPE', message: 'x' } })
-        .success
+      BridgeResponseSchema.safeParse({
+        type: 'error',
+        rid: 1,
+        error: { code: 'NOPE', message: 'x' }
+      }).success
     ).toBe(false)
   })
 })
@@ -106,8 +132,12 @@ describe('retrato de atividade', () => {
 
   it('aceita retrato vazio e rejeita fase desconhecida', () => {
     expect(
-      ActivitySnapshotSchema.safeParse({ appRunning: false, current: null, pending: [], live: null })
-        .success
+      ActivitySnapshotSchema.safeParse({
+        appRunning: false,
+        current: null,
+        pending: [],
+        live: null
+      }).success
     ).toBe(true)
     expect(
       JobProgressSchema.safeParse({
