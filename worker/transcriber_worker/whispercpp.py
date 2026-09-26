@@ -1,7 +1,8 @@
 """Backend whisper.cpp (pywhispercpp): GPU por Vulkan (Windows/Linux) ou Metal (macOS).
 
 Emite os mesmos eventos do faster-whisper. O callback de progresso do pywhispercpp não é
-confiável; o progresso vem do fim de cada trecho, como no outro backend.
+confiável; o progresso vem do fim de cada trecho, como no outro backend. O VAD também é o do
+faster-whisper: sem ele, trechos longos de silêncio viram texto inventado (ex.: "E aí").
 """
 
 import os
@@ -23,6 +24,8 @@ from transcriber_worker.transcription import PROGRESS_INTERVAL_S, TranscriptionR
 
 OnSegment = Callable[[float, float, str], None]
 Decode = Callable[[str], NDArray[np.float32]]
+# Trechos com fala, em amostras a 16 kHz: [{"start": ..., "end": ...}, ...].
+FindSpeech = Callable[[NDArray[np.float32]], list[dict[str, int]]]
 MAX_THREADS = 8
 
 
@@ -115,6 +118,14 @@ def local_cpp_factory(model_dir: str, device: Device) -> WhisperCppLike:
     return PyWhisperCppModel(find_ggml_model(model_dir), use_gpu=device == "gpu", threads=threads)
 
 
+def find_speech_silero(audio: NDArray[np.float32]) -> list[dict[str, int]]:
+    # Mesmo Silero VAD e mesmos parâmetros do vad_filter do faster-whisper.
+    from faster_whisper.vad import get_speech_timestamps
+
+    chunks: list[dict[str, int]] = get_speech_timestamps(audio)
+    return chunks
+
+
 def run_whispercpp(
     model: WhisperCppLike,
     input_path: str,
@@ -122,8 +133,9 @@ def run_whispercpp(
     job_id: str,
     emit: Emit,
     *,
-    vad_filter: bool = True,  # aceito para ter a mesma assinatura; o whisper.cpp não usa VAD aqui
+    vad_filter: bool = True,
     decode: Decode = decode_pcm16k,
+    find_speech: FindSpeech = find_speech_silero,
     clock: Callable[[], float] = time.monotonic,
     interval: float = PROGRESS_INTERVAL_S,
 ) -> TranscriptionResult:
@@ -132,12 +144,26 @@ def run_whispercpp(
     duration = audio.size / PCM_RATE
     index = 0
     last_progress = float("-inf")
+    speech_map = None
+    if vad_filter:
+        from faster_whisper.vad import SpeechTimestampsMap
+
+        chunks = find_speech(audio)
+        if not chunks:  # só silêncio: o modelo nem roda, senão inventa texto
+            emit(progress_event(job_id, duration, duration, clock() - started))
+            return TranscriptionResult(duration, language, 0)
+        # O modelo recebe só a fala, emendada; os tempos voltam para o áudio original.
+        audio = np.concatenate([audio[c["start"] : c["end"]] for c in chunks])
+        speech_map = SpeechTimestampsMap(chunks, PCM_RATE)
 
     def on_segment(start: float, end: float, raw: str) -> None:
         nonlocal index, last_progress
         text = raw.strip()
         if not text:
             return
+        if speech_map is not None:
+            start = speech_map.get_original_time(start)
+            end = speech_map.get_original_time(end, is_end=True)
         emit(segment_event(job_id, index, start, end, text))
         index += 1
         now = clock()
