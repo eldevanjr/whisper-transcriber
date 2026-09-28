@@ -10,10 +10,18 @@ dependencies = [
   # No build de release é trocado pelo wheel compilado com Vulkan/Metal (scripts/build-whispercpp).
   "pywhispercpp==1.5.1",
   "pydantic>=2.9,<3",
+  # Contratos e abstrações de IA compartilhados com o AI Work Analyzer.
+  "ai-core",
+  "psycopg[binary]>=3.2,<4",
 ]
 
 [project.scripts]
 transcriber-worker = "transcriber_worker.__main__:main"
+
+[tool.uv.sources]
+# Durante o desenvolvimento o ai-core é consumido como dependência local (repositório irmão).
+ai-core = { path = "../../ai-core", editable = true }
+
 
 [dependency-groups]
 dev = [
@@ -65,4 +73,8 @@ addopts = "-n auto --timeout=30 --cov=transcriber_worker --cov-branch --cov-repo
 markers = ["integration: usa o modelo real (lento; precisa de rede na primeira vez)"]
 
 [tool.coverage.report]
-exclude_also = ['if __name__ == "__main__":']
+exclude_also = [
+  'if __name__ == "__main__":',
+  "raise NotImplementedError",
+  "@(abc\\.)?abstractmethod",
+]

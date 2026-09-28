@@ -5,6 +5,11 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from transcriber_worker.ai.analysis_store import EntityKind
+from transcriber_worker.ai.config import AiConfig
+from transcriber_worker.ai.controller import AiController
+from transcriber_worker.ai.storage import StorageConfig
+from transcriber_worker.ai.windows import SegmentInput
 from transcriber_worker.audio import OnProgress, extract_audio
 from transcriber_worker.engine import Engine
 from transcriber_worker.errors import ErrorCode, WorkerError, classify_exception
@@ -22,7 +27,25 @@ from transcriber_worker.live.segmenter import VadFn
 from transcriber_worker.live.session import LiveSession
 from transcriber_worker.live.vad import StreamingVad
 from transcriber_worker.protocol import (
+    AiDiagnoseCommand,
+    AiPullModelCommand,
+    AiStatusCommand,
+    AnalysisAppendCommand,
+    AnalysisFinalizeCommand,
+    AnalysisGetCommand,
+    AnalysisProcessCommand,
+    AnalysisRetryCommand,
+    AnalysisSubmitCommand,
     Command,
+    ConfigureAiCommand,
+    KnowledgeAskCommand,
+    KnowledgeBackupCommand,
+    KnowledgeDeleteCommand,
+    KnowledgeReindexCancelCommand,
+    KnowledgeReindexCommand,
+    KnowledgeRestoreCommand,
+    KnowledgeSearchCommand,
+    KnowledgeSearchEntitiesCommand,
     LiveAudioCommand,
     LiveFinalizeCommand,
     LivePauseCommand,
@@ -56,12 +79,14 @@ class Dispatcher:
         *,
         extract: Extract = extract_audio,
         self_test_audio: Path = SELF_TEST_AUDIO,
+        ai: AiController | None = None,
     ) -> None:
         self._engine = engine
         self._emit = emit
         self._extract = extract
         self._self_test_audio = self_test_audio
         self._live: LiveSession | None = None
+        self._ai = ai or AiController(emit, whisper=engine.describe)
 
     def handle(self, command: Command) -> bool:
         try:
@@ -73,7 +98,13 @@ class Dispatcher:
             # Os blocos do ao vivo chegam 10 vezes por segundo por faixa: só erros respondem.
             if not isinstance(command, LiveAudioCommand):
                 self._emit(result_event(command.id, data))
+        if command.cmd == "shutdown":
+            self.close()
         return command.cmd != "shutdown"
+
+    def close(self) -> None:
+        """Fim do processo: para a IA (e o PostgreSQL local que ela subiu)."""
+        self._ai.shutdown()
 
     def _run(self, command: Command) -> dict[str, Any]:
         if isinstance(
@@ -89,7 +120,109 @@ class Dispatcher:
             if isinstance(command, TranscribeCommand):
                 return self._run_transcribe(command.params)
             return self._self_test()
-        return {}
+        ai_result = self._run_ai(command)
+        if ai_result is None:
+            ai_result = self._run_knowledge(command)
+        return ai_result if ai_result is not None else {}
+
+    def _run_ai(self, command: Command) -> dict[str, Any] | None:
+        if isinstance(command, ConfigureAiCommand):
+            config = AiConfig(**command.params.model_dump(exclude={"database_path", "storage"}))
+            storage = (
+                StorageConfig(**command.params.storage.model_dump())
+                if command.params.storage is not None
+                else None
+            )
+            _ = self._ai.configure(
+                config, database_path=command.params.database_path, storage=storage
+            )
+            return {"status": self._ai.status()}
+        analysis = self._run_analysis(command)
+        if analysis is not None:
+            return analysis
+        if isinstance(command, AnalysisProcessCommand):
+            return self._ai.process(max_items=command.params.max_items)
+        if isinstance(command, AnalysisFinalizeCommand):
+            return {"result": self._ai.finalize(transcription_id=command.params.transcription_id)}
+        if isinstance(command, AnalysisGetCommand):
+            return {
+                "analysis": self._ai.analysis_get(
+                    workspace_id=command.params.workspace_id,
+                    transcription_id=command.params.transcription_id,
+                )
+            }
+        if isinstance(command, AiStatusCommand):
+            workspace = command.params.workspace_id if command.params is not None else None
+            return {"status": self._ai.status(workspace)}
+        if isinstance(command, AiDiagnoseCommand):
+            return {"diagnostics": self._ai.diagnose()}
+        if isinstance(command, AiPullModelCommand):
+            return self._ai.pull_model(model=command.params.model)
+        return None
+
+    def _run_analysis(self, command: Command) -> dict[str, Any] | None:
+        if isinstance(command, AnalysisSubmitCommand | AnalysisAppendCommand):
+            params = command.params
+            segments = [
+                SegmentInput(index=item.index, start=item.start, end=item.end, text=item.text)
+                for item in params.segments
+            ]
+            action = (
+                self._ai.submit if isinstance(command, AnalysisSubmitCommand) else self._ai.append
+            )
+            return action(
+                transcription_id=params.transcription_id,
+                workspace_id=params.workspace_id,
+                title=params.title,
+                segments=segments,
+            )
+        if isinstance(command, AnalysisRetryCommand):
+            return self._ai.retry(transcription_id=command.params.transcription_id)
+        return None
+
+    def _run_knowledge(self, command: Command) -> dict[str, Any] | None:
+        if isinstance(command, KnowledgeSearchCommand):
+            return {
+                "results": self._ai.search(
+                    workspace_id=command.params.workspace_id,
+                    query=command.params.query,
+                    limit=command.params.limit,
+                )
+            }
+        if isinstance(command, KnowledgeSearchEntitiesCommand):
+            return {
+                "entities": self._ai.search_entities(
+                    workspace_id=command.params.workspace_id,
+                    kind=EntityKind(command.params.kind),
+                    query=command.params.query,
+                    limit=command.params.limit,
+                )
+            }
+        if isinstance(command, KnowledgeAskCommand):
+            return self._ai.ask(
+                workspace_id=command.params.workspace_id,
+                question=command.params.question,
+                limit=command.params.limit,
+            )
+        if isinstance(command, KnowledgeReindexCommand):
+            return {"enqueued": self._ai.reindex(workspace_id=command.params.workspace_id)}
+        if isinstance(command, KnowledgeReindexCancelCommand):
+            return self._ai.cancel_reindex(workspace_id=command.params.workspace_id)
+        if isinstance(command, KnowledgeDeleteCommand):
+            self._ai.delete(
+                workspace_id=command.params.workspace_id,
+                transcription_id=command.params.transcription_id,
+            )
+            return {"deleted": command.params.transcription_id}
+        if isinstance(command, KnowledgeBackupCommand):
+            return self._ai.backup(
+                workspace_id=command.params.workspace_id, path=command.params.path
+            )
+        if isinstance(command, KnowledgeRestoreCommand):
+            return self._ai.restore(
+                path=command.params.path, workspace_id=command.params.workspace_id
+            )
+        return None
 
     def _require_no_live(self) -> None:
         if self._live is not None:

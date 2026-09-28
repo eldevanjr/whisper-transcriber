@@ -51,6 +51,16 @@ def test_model_before_load_raises() -> None:
     assert info.value.code is ErrorCode.MODEL_NOT_LOADED
 
 
+def test_describe_without_model_is_none() -> None:
+    assert Engine(factory=FactorySpy()).describe() is None
+
+
+def test_describe_reports_engine_and_device() -> None:
+    engine = Engine(factory=FactorySpy(), prepare=lambda _lib: None)
+    _ = engine.load(CUDA)
+    assert engine.describe() == "faster-whisper · cuda"
+
+
 def test_load_cpu_does_not_prepare_cuda() -> None:
     factory, prepared = FactorySpy(), list[str | None]()
     engine = Engine(factory=factory, prepare=prepared.append)

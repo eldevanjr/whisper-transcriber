@@ -7,7 +7,8 @@ datas = collect_data_files("faster_whisper")  # VAD Silero (assets/silero_vad_v6
 datas += [("transcriber_worker/assets", "transcriber_worker/assets")]
 binaries = collect_dynamic_libs("ctranslate2")
 hiddenimports = ["_pywhispercpp"]
-for package in ("av", "onnxruntime", "tokenizers", "pywhispercpp"):
+# psycopg é importado sob demanda (ai/postgres.py): o PyInstaller não o acha sozinho.
+for package in ("av", "onnxruntime", "tokenizers", "pywhispercpp", "psycopg", "psycopg_binary"):
     pkg_datas, pkg_binaries, pkg_hidden = collect_all(package)
     datas += pkg_datas
     binaries += pkg_binaries

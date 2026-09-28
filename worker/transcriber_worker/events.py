@@ -90,3 +90,38 @@ def live_lag_event(session_id: str, seconds: float) -> Event:
 
 def live_error_event(session_id: str, code: str) -> Event:
     return {"type": "live_error", "session_id": session_id, "code": code}
+
+
+def ai_status_event(status: dict[str, Any]) -> Event:
+    """Estado das filas de IA (análise/indexação) e do runtime."""
+    return {"type": "ai_status", "status": status}
+
+
+def ai_analysis_event(
+    transcription_id: str, result: dict[str, Any], *, final: bool = False
+) -> Event:
+    """Resultado da análise: parcial (janelas até agora) ou final (revisada)."""
+    return {
+        "type": "ai_analysis",
+        "transcription_id": transcription_id,
+        "result": result,
+        "final": final,
+    }
+
+
+def ai_search_event(results: list[dict[str, Any]]) -> Event:
+    """Resultados de busca de conhecimento (RAG)."""
+    return {"type": "ai_search", "results": results}
+
+
+def ai_pull_event(model: str, chunk: dict[str, Any]) -> Event:
+    """Progresso do download (pull) de um modelo no Ollama (plano §26-like)."""
+    completed = chunk.get("completed")
+    total = chunk.get("total")
+    return {
+        "type": "ai_pull",
+        "model": model,
+        "status": chunk.get("status"),
+        "completed": completed if isinstance(completed, int) else 0,
+        "total": total if isinstance(total, int) else 0,
+    }

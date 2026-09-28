@@ -103,3 +103,22 @@ def test_run_worker_survives_invalid_utf8(tmp_path: Path, monkeypatch: pytest.Mo
         ("error", "INVALID_MESSAGE", None),
         ("result", None, "1"),
     ]
+
+
+def test_main_routes_ai_mode(mocker: MockerFixture) -> None:
+    run_worker = mocker.patch.object(entry, "run_worker", return_value=0)
+    assert entry.main(["ai"]) == 0
+    run_worker.assert_called_once_with(sys.stdin, sys.stdout, ai_mode=True)
+
+
+def test_run_worker_ai_mode_serves_concurrently_and_closes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    out_path, err_path = tmp_path / "out.jsonl", tmp_path / "err.log"
+    stdin = io.StringIO('{"id":"1","cmd":"ai_status"}\n')
+    with open(out_path, "w", encoding="utf-8") as out, open(err_path, "w", encoding="utf-8") as err:
+        monkeypatch.setattr(sys, "stderr", err)
+        assert entry.run_worker(stdin, out, ai_mode=True) == 0
+    events = [json.loads(line) for line in out_path.read_text(encoding="utf-8").splitlines()]
+    results = [event for event in events if event["type"] == "result"]
+    assert results[0]["data"]["status"]["configured"] is False

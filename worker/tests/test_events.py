@@ -3,7 +3,7 @@ from transcriber_worker.errors import ErrorCode, WorkerError
 
 
 def test_ready_event() -> None:
-    assert events.ready_event("1.2.3") == {"type": "ready", "protocol": 3, "version": "1.2.3"}
+    assert events.ready_event("1.2.3") == {"type": "ready", "protocol": 4, "version": "1.2.3"}
 
 
 def test_heartbeat_event() -> None:
@@ -112,3 +112,30 @@ def test_live_events() -> None:
         "session_id": "s",
         "code": "GPU_FAILED",
     }
+
+
+def test_ai_pull_event_inclui_progresso() -> None:
+    assert events.ai_pull_event("m", {"status": "downloading", "completed": 5, "total": 10}) == {
+        "type": "ai_pull",
+        "model": "m",
+        "status": "downloading",
+        "completed": 5,
+        "total": 10,
+    }
+
+
+def test_ai_pull_event_sem_totais() -> None:
+    event = events.ai_pull_event("m", {"status": "pulling manifest"})
+    assert event["completed"] == 0
+    assert event["total"] == 0
+    assert event["status"] == "pulling manifest"
+
+
+def test_ai_analysis_event_marks_final() -> None:
+    assert events.ai_analysis_event("t", {"topics": []}) == {
+        "type": "ai_analysis",
+        "transcription_id": "t",
+        "result": {"topics": []},
+        "final": False,
+    }
+    assert events.ai_analysis_event("t", {}, final=True)["final"] is True

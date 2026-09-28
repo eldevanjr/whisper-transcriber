@@ -164,7 +164,7 @@ def test_peek_command_id_survives_deeply_nested_json() -> None:
 def test_protocol_version_is_3() -> None:
     from transcriber_worker import PROTOCOL_VERSION
 
-    assert PROTOCOL_VERSION == 3
+    assert PROTOCOL_VERSION == 4
 
 
 def test_load_model_defaults_to_faster_whisper() -> None:

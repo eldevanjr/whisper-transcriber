@@ -117,6 +117,13 @@ class Engine:
     def _on_gpu(self) -> bool:
         return self._key is not None and self._key[2] == "gpu"
 
+    def describe(self) -> str | None:
+        """Resumo do modelo carregado (motor · dispositivo); ``None`` se não houver."""
+        if self._key is None:
+            return None
+        engine, _model_dir, device, _compute_type = self._key
+        return f"{engine} · {device}"
+
     @property
     def model(self) -> WhisperLike | WhisperCppLike:
         loaded = self._model or self._cpp
