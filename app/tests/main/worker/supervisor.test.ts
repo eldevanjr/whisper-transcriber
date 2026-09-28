@@ -115,6 +115,50 @@ describe('WorkerSupervisor', () => {
     await other
   })
 
+  it('avisa cada processo novo que fica pronto (quem guarda estado nele reconfigura)', async () => {
+    const onStarted = vi.fn()
+    const ctx = setup({ onStarted })
+    const first = ctx.supervisor.request({ cmd: 'ai_status' })
+    const child = await started(ctx)
+    expect(onStarted).toHaveBeenCalledTimes(1)
+    child.send({ type: 'result', id: child.lastCommand().id, data: {} })
+    await first
+    ctx.supervisor.kill()
+    const second = ctx.supervisor.request({ cmd: 'ai_status' })
+    const next = await started(ctx, 1)
+    expect(onStarted).toHaveBeenCalledTimes(2)
+    next.send({ type: 'result', id: next.lastCommand().id, data: {} })
+    await second
+  })
+
+  it('eventos da IA vão para onAiEvent, sem depender de um job', async () => {
+    const ai = vi.fn()
+    const ctx = setup({ onAiEvent: ai })
+    const pending = ctx.supervisor.request({ cmd: 'ai_status' })
+    const child = await started(ctx)
+    child.send({ type: 'ai_status', status: { configured: true } })
+    child.send({ type: 'ai_analysis', transcription_id: 't', result: {} })
+    child.send({ type: 'ai_search', results: [] })
+    child.send({ type: 'ai_pull', model: 'm', status: 'downloading', completed: 1, total: 2 })
+    child.send({ type: 'result', id: child.lastCommand().id, data: {} })
+    await pending
+    expect(ai).toHaveBeenCalledWith({ type: 'ai_status', status: { configured: true } })
+    expect(ai).toHaveBeenCalledWith({ type: 'ai_search', results: [] })
+    expect(ai).toHaveBeenCalledWith({
+      type: 'ai_pull',
+      model: 'm',
+      status: 'downloading',
+      completed: 1,
+      total: 2
+    })
+    const quiet = setup() // sem ouvinte: ignora
+    const other = quiet.supervisor.request({ cmd: 'ai_status' })
+    const child2 = await started(quiet)
+    child2.send({ type: 'ai_status', status: {} })
+    child2.send({ type: 'result', id: child2.lastCommand().id, data: {} })
+    await other
+  })
+
   it('notify envia sem esperar resposta, só com o processo de pé', async () => {
     const ctx = setup()
     const block = { cmd: 'live_stop', params: { session_id: 's' } } as const

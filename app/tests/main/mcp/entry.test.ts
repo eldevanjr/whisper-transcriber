@@ -204,6 +204,10 @@ describe('runMcp lifecycle', () => {
       connect: async () => ({ appVersion: '1', ready: true }),
       activity: async () => ({ appRunning: false, current: null, pending: [], live: null }),
       status: async () => null,
+      knowledge: async () => [],
+      ask: async () => ({ answer: '', model: null, sources: [] }),
+      entities: async () => [],
+      analysis: async () => null,
       transcribe: async () => ({ id: randomUUID() })
     }
     await runMcp({

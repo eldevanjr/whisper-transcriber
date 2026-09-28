@@ -32,6 +32,12 @@ export type QueueEvent =
 
 export type DownloadTarget = { kind: 'model'; id: ModelId; format?: ModelFormat } | { kind: 'cuda' }
 
+/** Progresso da reindexação do conhecimento (plano §26). */
+export interface AiReindexProgress {
+  completed: number
+  total: number
+}
+
 /** Chave estável de um download (o formato ct2 mantém a chave antiga, "model:<id>"). */
 export function downloadKey(target: DownloadTarget): string {
   if (target.kind === 'cuda') return 'cuda'

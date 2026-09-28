@@ -12,6 +12,9 @@ export const WORKER_ERROR_CODES = [
   'DISK_FULL',
   'LIVE_NOT_STARTED',
   'LIVE_ACTIVE',
+  'AI_NOT_CONFIGURED',
+  'AI_DISABLED',
+  'AI_BLOCKED',
   'INTERNAL'
 ] as const
 

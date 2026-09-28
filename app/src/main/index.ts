@@ -1,6 +1,7 @@
 import { execFile, spawn } from 'node:child_process'
+import { existsSync } from 'node:fs'
 import { readFile, rm, writeFile } from 'node:fs/promises'
-import { release, totalmem } from 'node:os'
+import { release, tmpdir, totalmem } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
 import {
@@ -16,6 +17,7 @@ import {
   nativeTheme,
   Notification,
   protocol,
+  safeStorage,
   session,
   shell,
   Tray
@@ -41,6 +43,16 @@ import { TrayView } from './background/tray'
 import { readDevOverrides } from './dev-overrides'
 import { Installer } from './downloads/installer'
 import { parseManifest } from './downloads/manifest'
+import { AiSession } from './ai/session'
+import {
+  normalizeAnalysis,
+  normalizeAnswer,
+  normalizeDiagnostics,
+  normalizeStatus,
+  withWhisperCheck
+} from './ai/intelligence'
+import { KnowledgeTransfer } from './ai/transfer'
+import { TranscriptionIndexer } from './ai/indexer'
 import { HistoryStore } from './history/store'
 import { registerIpcHandlers, type Services } from './ipc/handlers'
 import { createMonitorVolume } from './live/monitor-volume'
@@ -65,6 +77,7 @@ import { appPaths, modelDir } from './paths'
 import { TranscriptionQueue } from './queue/queue'
 import { applyCsp, isAllowedExternalUrl, isAllowedNavigation, isTrustedSender } from './security'
 import { SettingsStore } from './settings/store'
+import { SecretsStore } from './settings/secrets'
 import { applyTheme } from './theme'
 import { getSystemInfo } from './system/info'
 import electronUpdater from 'electron-updater'
@@ -72,8 +85,8 @@ import { createUpdater } from './updates'
 import windowIcon from '../../resources/icon.png?asset'
 import { integrateAppImage } from './linux-integration'
 import { createMainWindow, isWindowInView, keepInTray } from './window'
-import { resolveWorkerCommand, workerEnv } from './worker/locate'
-import { WorkerSupervisor, type Logger } from './worker/supervisor'
+import { aiWorkerCommand, resolveWorkerCommand, workerEnv } from './worker/locate'
+import { WorkerSupervisor, type Logger, type SpawnFn } from './worker/supervisor'
 
 const execFileAsync = promisify(execFile)
 
@@ -134,6 +147,12 @@ async function main(): Promise<void> {
   const settings = await SettingsStore.open(paths)
   if (settings.recovered)
     logger.warn('settings.json inválido: padrão restaurado (backup em settings.bak.json)')
+  // Senhas de IA: criptografadas pelo SO (safeStorage), nunca gravadas em claro.
+  const secrets = await SecretsStore.open(join(paths.root, 'ai-secrets.json'), {
+    available: () => safeStorage.isEncryptionAvailable(),
+    encrypt: (text) => safeStorage.encryptString(text).toString('base64'),
+    decrypt: (token) => safeStorage.decryptString(Buffer.from(token, 'base64'))
+  })
   const history = new HistoryStore(paths.history)
   // Retrato do que o app está fazendo, servido pela ponte do MCP (spec §7.4).
   const tracker = new ActivityTracker()
@@ -148,23 +167,59 @@ async function main(): Promise<void> {
       ? (JSON.parse(await readFile(overrides.manifestPath, 'utf8')) as unknown)
       : manifestJson
   )
+  const workerCommand =
+    overrides.workerCommand ??
+    resolveWorkerCommand({
+      isPackaged: app.isPackaged,
+      resourcesPath: process.resourcesPath,
+      appPath: app.getAppPath(),
+      platform: process.platform
+    })
+  const spawnWorker: SpawnFn = (command, args, options) =>
+    spawn(command, [...args], { ...options, stdio: 'pipe', windowsHide: true })
   const worker = new WorkerSupervisor({
-    spawn: (command, args, options) =>
-      spawn(command, [...args], { ...options, stdio: 'pipe', windowsHide: true }),
-    commandLine:
-      overrides.workerCommand ??
-      resolveWorkerCommand({
-        isPackaged: app.isPackaged,
-        resourcesPath: process.resourcesPath,
-        appPath: app.getAppPath(),
-        platform: process.platform
-      }),
+    spawn: spawnWorker,
+    commandLine: workerCommand,
     envFor: (device) =>
       workerEnv(process.env, { platform: process.platform, device, cudaDir: paths.cuda }),
     expectedVersion: app.getVersion(),
     logger,
     onLiveEvent: (event) => {
       live.onWorkerEvent(event)
+    }
+  })
+  // IA num processo próprio: Ollama lento (ou um download de modelo) nunca segura a
+  // transcrição, e cancelar/trocar de dispositivo não derruba a análise.
+  const aiWorker = new WorkerSupervisor({
+    spawn: spawnWorker,
+    commandLine: aiWorkerCommand(workerCommand),
+    envFor: () =>
+      workerEnv(process.env, { platform: process.platform, device: 'cpu', cudaDir: paths.cuda }),
+    expectedVersion: app.getVersion(),
+    logger,
+    onStarted: () => {
+      aiSession.reset() // processo novo: o runtime configurado ficou no anterior
+    },
+    onAiEvent: (event) => {
+      if (event.type === 'ai_status') {
+        send(EVENTS.ai, { type: 'status', status: normalizeStatus(event.status) })
+      } else if (event.type === 'ai_analysis') {
+        send(EVENTS.ai, {
+          type: 'analysis',
+          transcriptionId: event.transcription_id,
+          analysis: normalizeAnalysis(event.result),
+          final: event.final
+        })
+      } else if (event.type === 'ai_search') {
+        send(EVENTS.ai, { type: 'search', results: event.results })
+      } else {
+        send(EVENTS.ai, {
+          type: 'pull',
+          model: event.model,
+          completed: event.completed,
+          total: event.total
+        })
+      }
     }
   })
   const installer = new Installer({
@@ -189,6 +244,22 @@ async function main(): Promise<void> {
   })
   // Criado depois (precisa da fila e do ao vivo); os eventos chegam só com o app rodando.
   let background: BackgroundController | null = null
+  // IA local: configura o worker da IA sob demanda e analisa/indexa as transcrições
+  // (arquivos e ao vivo) enquanto andam.
+  const aiDatabase = join(paths.root, 'ai.sqlite')
+  const aiSession = new AiSession({
+    worker: aiWorker,
+    settings,
+    secrets,
+    databasePath: aiDatabase,
+    hasData: () => existsSync(aiDatabase),
+    logger
+  })
+  const transcriptionIndexer = new TranscriptionIndexer({
+    session: aiSession,
+    logger,
+    titleOf: async (id) => (await history.get(id)).fileName
+  })
   const queue = new TranscriptionQueue({
     history,
     settings,
@@ -197,6 +268,7 @@ async function main(): Promise<void> {
     cudaLibDir: paths.cuda,
     emit: (event) => {
       tracker.onQueueEvent(event)
+      transcriptionIndexer.onEvent(event)
       send(EVENTS.queue, event)
       background?.onQueueEvent(event)
     },
@@ -210,6 +282,7 @@ async function main(): Promise<void> {
     settings,
     emit: (event) => {
       tracker.onLive(event)
+      transcriptionIndexer.onLiveEvent(event)
       send(EVENTS.live, event)
       background?.onLiveEvent(event)
     },
@@ -225,6 +298,12 @@ async function main(): Promise<void> {
     paths,
     tracker,
     queue,
+    ai: {
+      knowledge: (query, limit) => aiSession.searchKnowledge(query, limit),
+      ask: (question, limit) => aiSession.ask(question, limit),
+      entities: (kind, query, limit) => aiSession.searchEntities(kind, query, limit),
+      analysis: (transcriptionId) => aiSession.getAnalysis(transcriptionId)
+    },
     settings,
     platform: process.platform,
     version: app.getVersion(),
@@ -356,6 +435,34 @@ async function main(): Promise<void> {
   }
   const { controller, shortcuts, tray, showWindow } = await setupBackground()
 
+  // Backup/restauração do conhecimento: o worker grava/lê um arquivo; o app
+  // passa por um temporário até o destino escolhido nos diálogos nativos.
+  const transfer = new KnowledgeTransfer({
+    backupTo: (path) => aiSession.backup(path),
+    restoreFrom: (path) => aiSession.restore(path),
+    pickRestoreFile: async () => {
+      const result = await dialog.showOpenDialog({
+        properties: ['openFile'],
+        filters: [{ name: 'Backup de conhecimento', extensions: ['json'] }]
+      })
+      return result.canceled || result.filePaths.length === 0 ? null : (result.filePaths[0] ?? null)
+    },
+    saveFile: async (content) => {
+      const result = await dialog.showSaveDialog({ defaultPath: 'conhecimento.json' })
+      if (result.canceled || !result.filePath) return false
+      await writeFile(result.filePath, content, 'utf8')
+      return true
+    },
+    tempPath: () => join(tmpdir(), `wt-knowledge-${String(Date.now())}.json`),
+    read: (path) => readFile(path, 'utf8'),
+    write: async (path, content) => {
+      await writeFile(path, content, 'utf8')
+    },
+    remove: async (path) => {
+      await rm(path, { force: true })
+    }
+  })
+
   const services: Services = {
     settings,
     queue,
@@ -398,6 +505,14 @@ async function main(): Promise<void> {
     },
     dataDir: paths.root,
     clearActivity: () => rm(paths.mcpActivity, { force: true }),
+    // O conhecimento vive no processo da IA (SQLite ou PostgreSQL): some junto com o histórico.
+    forgetKnowledge: async (ids) => {
+      for (const id of ids) {
+        await aiSession.forget(id).catch((error: unknown) => {
+          logger.warn(`[ia] conhecimento de ${id} não apagado: ${String(error)}`)
+        })
+      }
+    },
     externalUrls: licenseUrls(licensesJson),
     live,
     mcp: {
@@ -412,6 +527,45 @@ async function main(): Promise<void> {
       disconnect: (id) => runConnectorAction(connectorDeps, activityLog, id, 'disconnect'),
       test: () => runSelfTest(paths.mcpLauncher),
       activity: () => activityLog.recent()
+    },
+    aiSecrets: {
+      status: () => secrets.status(),
+      set: (kind, value) => secrets.set(kind, value),
+      clear: (kind) => secrets.clear(kind)
+    },
+    ai: {
+      status: async () => normalizeStatus(await aiSession.status()),
+      analysis: async (id) => normalizeAnalysis(await aiSession.getAnalysis(id)),
+      diagnose: async () =>
+        withWhisperCheck(normalizeDiagnostics(await aiSession.diagnose()), settings.get().model),
+      reanalyze: async (id) => {
+        const meta = await history.get(id)
+        const entries = await history.readActive(meta)
+        await aiSession.submit({
+          transcriptionId: id,
+          title: meta.fileName,
+          segments: entries.map((entry, index) => ({
+            index,
+            start: entry.inicio,
+            end: entry.fim,
+            text: entry.texto
+          }))
+        })
+        return null
+      },
+      retry: (id) => aiSession.retry(id),
+      ask: async (question) => normalizeAnswer({ ...(await aiSession.ask(question)) }),
+      reindex: () =>
+        aiSession.reindex(undefined, (progress) => {
+          send(EVENTS.aiReindex, progress)
+        }),
+      cancelReindex: () => {
+        aiSession.cancelReindex()
+        return Promise.resolve(null)
+      },
+      backup: () => transfer.backup(),
+      restore: () => transfer.restore(),
+      pullModel: (model) => aiSession.pullModel(model)
     },
     background: {
       onStarted: (input) => {
@@ -543,6 +697,7 @@ async function main(): Promise<void> {
     tray.destroy()
     queue.shutdown()
     worker.dispose()
+    aiWorker.dispose()
     void bridgeServer.close()
   })
   app.on('window-all-closed', () => {

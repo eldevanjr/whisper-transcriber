@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  DEFAULT_AI_SETTINGS,
   DEFAULT_MCP_SETTINGS,
   DEFAULT_SETTINGS,
   DEFAULT_TRAY_SETTINGS,
@@ -91,5 +92,50 @@ describe('configurações da bandeja', () => {
     expect(patch(null)).toBe(true)
     expect(patch('Shift+R')).toBe(false)
     expect(patch('Alt')).toBe(false)
+  })
+})
+
+describe('configurações da IA local', () => {
+  it('padrão vem desligado, com Ollama local e workspace "default"', () => {
+    expect(DEFAULT_AI_SETTINGS.enabled).toBe(false)
+    expect(DEFAULT_AI_SETTINGS.ollamaUrl).toBe('http://localhost:11434')
+    expect(DEFAULT_AI_SETTINGS.workspaceId).toBe('default')
+    expect(SettingsSchema.parse(DEFAULT_SETTINGS).ai).toEqual(DEFAULT_AI_SETTINGS)
+  })
+
+  it('settings sem "ai" (de antes da IA) recebem o padrão', () => {
+    const old: Record<string, unknown> = { ...DEFAULT_SETTINGS }
+    delete old.ai
+    expect(SettingsSchema.parse(old).ai).toEqual(DEFAULT_AI_SETTINGS)
+  })
+
+  it('patch troca o objeto "ai" inteiro: parcial é recusado, completo é aceito', () => {
+    expect(SettingsPatchSchema.safeParse({ ai: { enabled: true } }).success).toBe(false)
+    expect(
+      SettingsPatchSchema.safeParse({ ai: { ...DEFAULT_AI_SETTINGS, enabled: true } }).success
+    ).toBe(true)
+  })
+
+  it('overlap deve ser menor que a janela', () => {
+    const ai = { ...DEFAULT_AI_SETTINGS, analysisWindowSeconds: 10, analysisOverlapSeconds: 10 }
+    expect(SettingsPatchSchema.safeParse({ ai }).success).toBe(false)
+    expect(
+      SettingsPatchSchema.safeParse({
+        ai: { ...ai, analysisOverlapSeconds: 5 }
+      }).success
+    ).toBe(true)
+  })
+
+  it('Ollama remoto começa bloqueado e settings antigas de IA recebem o padrão', () => {
+    expect(DEFAULT_AI_SETTINGS.allowRemoteOllama).toBe(false)
+    const old: Partial<typeof DEFAULT_AI_SETTINGS> = { ...DEFAULT_AI_SETTINGS }
+    delete old.allowRemoteOllama
+    const parsed = SettingsSchema.parse({ ...DEFAULT_SETTINGS, ai: old })
+    expect(parsed.ai.allowRemoteOllama).toBe(false)
+  })
+
+  it('aceita o modo automático do banco', () => {
+    const ai = { ...DEFAULT_AI_SETTINGS, storage: { ...DEFAULT_AI_SETTINGS.storage, mode: 'auto' } }
+    expect(SettingsPatchSchema.safeParse({ ai }).success).toBe(true)
   })
 })

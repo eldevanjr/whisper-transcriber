@@ -1,3 +1,4 @@
+import type { HistoryList, HistoryMeta } from '../../../src/shared/history'
 import { describe, expect, it, vi } from 'vitest'
 import {
   registerIpcHandlers,
@@ -54,7 +55,7 @@ function setup(settingsOverride: Partial<Settings> = {}) {
       selfTest: vi.fn(() => Promise.resolve())
     },
     history: {
-      list: vi.fn(() => Promise.resolve({ entries: [], corrupted: [] })),
+      list: vi.fn((): Promise<HistoryList> => Promise.resolve({ entries: [], corrupted: [] })),
       get: vi.fn(() =>
         Promise.resolve({ id: JOB, mediaKind: 'video', sourcePath: '/nao/existe.mp4' })
       ),
@@ -90,6 +91,7 @@ function setup(settingsOverride: Partial<Settings> = {}) {
     installUpdate: vi.fn(),
     dataDir: '/dados',
     clearActivity: vi.fn(() => Promise.resolve()),
+    forgetKnowledge: vi.fn(() => Promise.resolve()),
     appInfo: vi.fn(() => ({ version: '0.1.0', platform: 'linux', settingsRecovered: false })),
     externalUrls: new Set(['https://github.com/facebook/react']),
     liveCapabilities: vi.fn(() => ({ systemAudio: 'monitor' })),
@@ -122,6 +124,43 @@ function setup(settingsOverride: Partial<Settings> = {}) {
           { at: '2026-09-26T12:00:00.000Z', client: 'codex', tool: 'list_transcriptions' }
         ])
       )
+    },
+    aiSecrets: {
+      status: vi.fn(() => ({ available: true, postgres: false, container: false })),
+      set: vi.fn((kind: 'postgres' | 'container') =>
+        Promise.resolve({
+          available: true,
+          postgres: kind === 'postgres',
+          container: kind === 'container'
+        })
+      ),
+      clear: vi.fn(() => Promise.resolve({ available: true, postgres: false, container: false }))
+    },
+    ai: {
+      status: vi.fn(() =>
+        Promise.resolve({
+          configured: true,
+          enabled: true,
+          pendingAnalysis: 1,
+          failedAnalysis: 0,
+          index: { total: 4, completed: 3, pending: 1, failed: 0 },
+          storage: { kind: 'sqlite', fallback: false, reason: null },
+          blocked: null,
+          reindexRequired: false
+        })
+      ),
+      analysis: vi.fn(() => Promise.resolve({ summary: null, items: [], model: null })),
+      diagnose: vi.fn(() =>
+        Promise.resolve([{ name: 'ollama', ok: true, detail: 'http://x · 2 modelos' }])
+      ),
+      reindex: vi.fn(() => Promise.resolve(3)),
+      reanalyze: vi.fn(() => Promise.resolve(null)),
+      retry: vi.fn(() => Promise.resolve(2)),
+      ask: vi.fn(() => Promise.resolve({ answer: 'ok', model: null, sources: [] })),
+      cancelReindex: vi.fn(() => Promise.resolve(null)),
+      backup: vi.fn(() => Promise.resolve({ documents: 2, chunks: 5, analyses: 1 })),
+      restore: vi.fn(() => Promise.resolve({ documents: 2, chunks: 5, analyses: 1 })),
+      pullModel: vi.fn((model: string) => Promise.resolve({ model }))
     },
     background: {
       onStarted: vi.fn(),
@@ -247,10 +286,15 @@ describe('registerIpcHandlers', () => {
     )
   })
 
-  it('limpar histórico só com a fila ociosa', async () => {
+  it('limpar histórico só com a fila ociosa (e apaga o conhecimento derivado)', async () => {
     const { call, services } = setup()
+    services.history.list.mockResolvedValueOnce({
+      entries: [{ id: JOB } as HistoryMeta],
+      corrupted: ['quebrado']
+    })
     expect(await call(IPC.historyClear)).toEqual(ok({ count: 2, bytes: 10 }))
     expect(services.clearActivity).toHaveBeenCalledTimes(1)
+    expect(services.forgetKnowledge).toHaveBeenCalledWith([JOB, 'quebrado'])
     services.queue.isIdle.mockReturnValue(false)
     expect(await call(IPC.historyClear)).toEqual(fail('INVALID_REQUEST'))
     expect(services.clearActivity).toHaveBeenCalledTimes(1)
@@ -517,5 +561,130 @@ describe('IPC do segundo plano', () => {
     expect(await call(IPC.backgroundSuspendShortcut, true)).toEqual(ok(null))
     expect(services.background.suspendShortcut).toHaveBeenCalledWith(true)
     expect(await call(IPC.backgroundSuspendShortcut, 'sim')).toEqual(fail('INVALID_REQUEST'))
+  })
+})
+
+describe('IPC das senhas de IA', () => {
+  it('lê o status, define e remove com validação', async () => {
+    const { call, services } = setup()
+    expect(await call(IPC.aiSecretsStatus)).toEqual(
+      ok({ available: true, postgres: false, container: false })
+    )
+    expect(await call(IPC.aiSecretSet, { kind: 'postgres', value: 'segredo' })).toEqual(
+      ok({ available: true, postgres: true, container: false })
+    )
+    expect(services.aiSecrets.set).toHaveBeenCalledWith('postgres', 'segredo')
+    expect(await call(IPC.aiSecretClear, 'postgres')).toEqual(
+      ok({ available: true, postgres: false, container: false })
+    )
+    expect(services.aiSecrets.clear).toHaveBeenCalledWith('postgres')
+  })
+
+  it('recusa tipo/valor inválidos e origem não autorizada', async () => {
+    const { call, services } = setup()
+    expect(await call(IPC.aiSecretSet, { kind: 'outro', value: 'x' })).toEqual(
+      fail('INVALID_REQUEST')
+    )
+    expect(await call(IPC.aiSecretSet, { kind: 'postgres', value: 'x'.repeat(4097) })).toEqual(
+      fail('INVALID_REQUEST')
+    )
+    expect(await call(IPC.aiSecretClear, 'nope')).toEqual(fail('INVALID_REQUEST'))
+    expect(
+      await call(IPC.aiSecretsStatus, undefined, { sender: 'outra', senderFrame: APP_FRAME })
+    ).toEqual(fail('INVALID_REQUEST'))
+    expect(services.aiSecrets.set).not.toHaveBeenCalled()
+    expect(services.aiSecrets.clear).not.toHaveBeenCalled()
+  })
+})
+
+describe('IPC da IA local', () => {
+  it('status e análise da transcrição', async () => {
+    const { call, services } = setup()
+    expect(await call(IPC.aiStatus)).toEqual(
+      ok({
+        configured: true,
+        enabled: true,
+        pendingAnalysis: 1,
+        failedAnalysis: 0,
+        index: { total: 4, completed: 3, pending: 1, failed: 0 },
+        storage: { kind: 'sqlite', fallback: false, reason: null },
+        blocked: null,
+        reindexRequired: false
+      })
+    )
+    expect(await call(IPC.aiAnalysis, JOB)).toEqual(ok({ summary: null, items: [], model: null }))
+    expect(services.ai.analysis).toHaveBeenCalledWith(JOB)
+  })
+
+  it('recusa id inválido e origem não autorizada', async () => {
+    const { call, services } = setup()
+    expect(await call(IPC.aiAnalysis, 'nope')).toEqual(fail('INVALID_REQUEST'))
+    expect(
+      await call(IPC.aiStatus, undefined, { sender: 'outra', senderFrame: APP_FRAME })
+    ).toEqual(fail('INVALID_REQUEST'))
+    expect(services.ai.status).not.toHaveBeenCalled()
+    expect(services.ai.analysis).not.toHaveBeenCalled()
+  })
+})
+
+describe('IPC do diagnóstico de IA', () => {
+  it('devolve as verificações', async () => {
+    const { call, services } = setup()
+    expect(await call(IPC.aiDiagnose)).toEqual(
+      ok([{ name: 'ollama', ok: true, detail: 'http://x · 2 modelos' }])
+    )
+    expect(services.ai.diagnose).toHaveBeenCalled()
+  })
+
+  it('reindexa e devolve o total enfileirado', async () => {
+    const { call, services } = setup()
+    expect(await call(IPC.aiReindex)).toEqual(ok(3))
+    expect(services.ai.reindex).toHaveBeenCalled()
+  })
+
+  it('cancela a reindexação', async () => {
+    const { call, services } = setup()
+    expect(await call(IPC.aiCancelReindex)).toEqual(ok(null))
+    expect(services.ai.cancelReindex).toHaveBeenCalled()
+  })
+
+  it('backup e restore do conhecimento', async () => {
+    const { call, services } = setup()
+    expect(await call(IPC.aiBackup)).toEqual(ok({ documents: 2, chunks: 5, analyses: 1 }))
+    expect(await call(IPC.aiRestore)).toEqual(ok({ documents: 2, chunks: 5, analyses: 1 }))
+    expect(services.ai.backup).toHaveBeenCalled()
+    expect(services.ai.restore).toHaveBeenCalled()
+  })
+
+  it('baixa um modelo do Ollama', async () => {
+    const { call, services } = setup()
+    expect(await call(IPC.aiPullModel, 'qwen3:8b')).toEqual(ok({ model: 'qwen3:8b' }))
+    expect(services.ai.pullModel).toHaveBeenCalledWith('qwen3:8b')
+  })
+
+  it('reanalisa, tenta de novo e pergunta ao conhecimento', async () => {
+    const { call, services } = setup()
+    expect(await call(IPC.aiReanalyze, JOB)).toEqual(ok(null))
+    expect(services.ai.reanalyze).toHaveBeenCalledWith(JOB)
+    expect(await call(IPC.aiRetry, JOB)).toEqual(ok(2))
+    expect(services.ai.retry).toHaveBeenCalledWith(JOB)
+    expect(await call(IPC.aiAsk, 'quem faz o deploy?')).toEqual(
+      ok({ answer: 'ok', model: null, sources: [] })
+    )
+    expect(services.ai.ask).toHaveBeenCalledWith('quem faz o deploy?')
+  })
+
+  it('recusa pergunta vazia ou longa demais', async () => {
+    const { call, services } = setup()
+    expect(await call(IPC.aiAsk, '')).toMatchObject({ ok: false })
+    expect(await call(IPC.aiAsk, 'x'.repeat(501))).toMatchObject({ ok: false })
+    expect(await call(IPC.aiReanalyze, 'nope')).toMatchObject({ ok: false })
+    expect(services.ai.ask).not.toHaveBeenCalled()
+  })
+
+  it('recusa nome de modelo inválido', async () => {
+    const { call, services } = setup()
+    expect(await call(IPC.aiPullModel, '')).toMatchObject({ ok: false })
+    expect(services.ai.pullModel).not.toHaveBeenCalled()
   })
 })

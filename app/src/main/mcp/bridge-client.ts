@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises'
 import { createConnection } from 'node:net'
+import type { SearchResult } from 'ai-core-types'
 import { z } from 'zod'
 import { AppError } from '../../shared/errors'
 import {
@@ -9,7 +10,10 @@ import {
   type ActivitySnapshot,
   type BridgeRequest,
   type BridgeResponse,
-  type JobProgress
+  type JobProgress,
+  type KnowledgeAnswer,
+  type KnowledgeEntityKind,
+  type KnowledgePort
 } from '../../shared/mcp'
 import type { AppPaths } from '../paths'
 import type { BridgePort } from './server'
@@ -25,6 +29,14 @@ export type BridgeInfo = z.infer<typeof BridgeInfoSchema>
 
 const PingDataSchema = z.object({ appVersion: z.string(), ready: z.boolean() })
 const CreatedJobSchema = z.object({ id: z.uuid(), position: z.number().optional() })
+const KnowledgeDataSchema = z.object({ results: z.array(z.unknown()) })
+const AskDataSchema = z.object({
+  answer: z.string(),
+  model: z.string().nullable(),
+  sources: z.array(z.unknown())
+})
+const EntitiesDataSchema = z.object({ entities: z.array(z.unknown()) })
+const AnalysisDataSchema = z.object({ analysis: z.unknown() })
 
 const AUTH_RID = 1
 const REQUEST_RID = 2
@@ -37,7 +49,7 @@ export interface BridgeClientOptions {
 }
 
 /** O que a ponte do processo MCP precisa do cliente; facilita o teste do adaptador. */
-export interface BridgeClientLike {
+export interface BridgeClientLike extends KnowledgePort {
   connect(): Promise<{ appVersion: string; ready: boolean }>
   activity(): Promise<ActivitySnapshot>
   status(id: string): Promise<JobProgress | null>
@@ -78,6 +90,44 @@ export class BridgeClient implements BridgeClientLike {
     return CreatedJobSchema.parse(
       await this.call({ type: 'transcribe', rid: REQUEST_RID, path, client })
     )
+  }
+
+  async knowledge(query: string, limit: number): Promise<SearchResult[]> {
+    const data = KnowledgeDataSchema.parse(
+      await this.call({ type: 'knowledge', rid: REQUEST_RID, query, limit })
+    )
+    return data.results as SearchResult[]
+  }
+
+  async ask(question: string, limit: number): Promise<KnowledgeAnswer> {
+    const data = AskDataSchema.parse(
+      await this.call({ type: 'ask', rid: REQUEST_RID, question, limit })
+    )
+    return { ...data, sources: data.sources as SearchResult[] }
+  }
+
+  async entities(
+    kind: KnowledgeEntityKind,
+    query: string | undefined,
+    limit: number
+  ): Promise<unknown[]> {
+    const data = EntitiesDataSchema.parse(
+      await this.call({
+        type: 'entities',
+        rid: REQUEST_RID,
+        kind,
+        limit,
+        ...(query ? { query } : {})
+      })
+    )
+    return data.entities
+  }
+
+  async analysis(transcriptionId: string): Promise<unknown> {
+    const data = AnalysisDataSchema.parse(
+      await this.call({ type: 'analysis', rid: REQUEST_RID, transcriptionId })
+    )
+    return data.analysis
   }
 
   /** Consulta o progresso a cada `pollMs` (spec §9.8); o retorno cancela. Null = terminou/saiu. */
@@ -180,6 +230,10 @@ export function createLiveBridge(deps: {
   return {
     activity: () => deps.client.activity(),
     status: (id) => deps.client.status(id),
+    knowledge: (query, limit) => deps.client.knowledge(query, limit),
+    ask: (question, limit) => deps.client.ask(question, limit),
+    entities: (kind, query, limit) => deps.client.entities(kind, query, limit),
+    analysis: (id) => deps.client.analysis(id),
     transcribe: async (path, client) => {
       await deps.ensureRunning()
       const created = await deps.client.transcribe(path, client)

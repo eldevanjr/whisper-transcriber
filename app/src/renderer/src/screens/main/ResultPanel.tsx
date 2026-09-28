@@ -24,9 +24,10 @@ import { useSpeakerLabels } from '../../hooks/useSpeakerLabels'
 import { usePlayer } from '../../hooks/usePlayer'
 import { useApi, useAppStore } from '../../providers'
 import { SegmentList } from './ChatPanel'
+import { IntelligencePanel } from './IntelligencePanel'
 import { JsonView } from './JsonView'
 
-type Tab = 'segments' | 'text' | 'timed' | 'json'
+type Tab = 'intelligence' | 'segments' | 'text' | 'timed' | 'json'
 
 const NO_ENTRIES: TranscriptEntry[] = []
 
@@ -187,6 +188,30 @@ function Toolbar(props: {
   )
 }
 
+type PanelMode = 'intelligence' | 'empty' | 'transcript'
+
+function panelMode(tab: Tab, transcriptEmpty: boolean): PanelMode {
+  if (tab === 'intelligence') return 'intelligence'
+  return transcriptEmpty ? 'empty' : 'transcript'
+}
+
+function EmptyTranscript({ redo, onRetry }: { redo: boolean; onRetry: () => void }) {
+  const { t } = useTranslation()
+  return (
+    <div className="flex flex-col items-start gap-3 p-4 text-sm text-muted">
+      <p>{t('result.empty')}</p>
+      {redo && (
+        <>
+          <p>{t('result.emptyHint')}</p>
+          <Button size="sm" onClick={onRetry}>
+            {t('main.retry')}
+          </Button>
+        </>
+      )}
+    </div>
+  )
+}
+
 /** Resultado em abas (Trechos, Texto, Com tempos, JSON), com Copiar e Baixar agindo na aba aberta. */
 export function ResultPanel({ meta, detail }: { meta: HistoryMeta; detail: HistoryDetail | null }) {
   const { t } = useTranslation()
@@ -197,7 +222,9 @@ export function ResultPanel({ meta, detail }: { meta: HistoryMeta; detail: Histo
   const entries = detail?.transcript ?? NO_ENTRIES
   const paragraphs = useMemo(() => toParagraphs(entries), [entries])
   const content = (): string => formatFor(tab, { entries, paragraphs, labels })
-  const empty = entries.length === 0
+  const transcriptEmpty = entries.length === 0
+  const mode = panelMode(tab, transcriptEmpty)
+  const empty = mode !== 'transcript'
   const actionsQueue = useQueueActions()
   const redo = meta.status === 'done'
   const retry = () => void actionsQueue.retry(meta.id)
@@ -225,7 +252,8 @@ export function ResultPanel({ meta, detail }: { meta: HistoryMeta; detail: Histo
           { id: 'segments', label: t('result.segments') },
           { id: 'text', label: t('result.text') },
           { id: 'timed', label: t('result.timed') },
-          { id: 'json', label: t('result.json') }
+          { id: 'json', label: t('result.json') },
+          { id: 'intelligence', label: t('result.intelligence') }
         ]}
         value={tab}
         onChange={(id) => {
@@ -233,20 +261,11 @@ export function ResultPanel({ meta, detail }: { meta: HistoryMeta; detail: Histo
         }}
         actions={actions}
       >
-        {empty && detail !== null && (
-          <div className="flex flex-col items-start gap-3 p-4 text-sm text-muted">
-            <p>{t('result.empty')}</p>
-            {redo && (
-              <>
-                <p>{t('result.emptyHint')}</p>
-                <Button size="sm" onClick={retry}>
-                  {t('main.retry')}
-                </Button>
-              </>
-            )}
-          </div>
+        {mode === 'empty' && detail !== null && <EmptyTranscript redo={redo} onRetry={retry} />}
+        {mode === 'intelligence' && (
+          <IntelligencePanel transcriptionId={meta.id} transcriptionStatus={meta.status} />
         )}
-        {empty ? null : (
+        {mode === 'transcript' && (
           <TabBody tab={tab} entries={entries} paragraphs={paragraphs} labels={labels} />
         )}
       </Tabs>

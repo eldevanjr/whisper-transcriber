@@ -53,6 +53,9 @@
     "GPU_FAILED": "The GPU failed. Transcription continued on the CPU.",
     "LIVE_NOT_STARTED": "No live session is running.",
     "LIVE_ACTIVE": "A live transcription is already running.",
+    "AI_NOT_CONFIGURED": "Local AI is not configured.",
+    "AI_DISABLED": "Local AI is turned off in settings.",
+    "AI_BLOCKED": "The configured Ollama is outside this computer/local network. Turn on \"Allow remote Ollama\" to use it.",
     "QUEUE_BUSY": "Wait for the queue to finish (or cancel the current file) to start live.",
     "MIC_DENIED": "Microphone access was denied.",
     "MCP_DISABLED": "AI access is turned off in Whisper Transcriber (Settings → AI assistants).",
@@ -177,6 +180,49 @@
       "empty": "Segments appear here as the transcription progresses.",
       "seek": "Go to {{time}}"
     },
+    "intelligence": {
+      "status": "Analysis: {{pending}} pending · Indexing: {{percent}}%",
+      "summary": "Summary",
+      "off": "Local AI is off.",
+      "fallback": "Using SQLite (fallback).",
+      "fallbackReason": "Using SQLite ({{reason}}).",
+      "refresh": "Refresh",
+      "loading": "Loading analysis…",
+      "empty": "No analysis yet. Turn on local AI in Settings.",
+      "kinds": {
+        "topic": "Topics",
+        "task": "Tasks",
+        "decision": "Decisions",
+        "problem": "Problems",
+        "question": "Questions",
+        "person": "People"
+      },
+      "transcription": "Transcription: {{state}}",
+      "transcriptionStates": {
+        "queued": "queued",
+        "processing": "in progress",
+        "done": "done",
+        "failed": "failed",
+        "canceled": "canceled",
+        "interrupted": "interrupted"
+      },
+      "partial": "Partial analysis — updates while the transcription runs.",
+      "states": {
+        "UPDATED": "updated",
+        "CONFIRMED": "confirmed",
+        "CANCELLED": "canceled"
+      },
+      "reindexRequired": "The embeddings model changed. Reindex the knowledge in Settings.",
+      "retry": "Try again ({{count}})",
+      "reanalyze": "Reanalyze",
+      "ask": {
+        "label": "Ask about your transcriptions",
+        "submit": "Ask",
+        "asking": "Thinking…",
+        "sources": "Sources",
+        "other": "{{title}} · {{time}}"
+      }
+    },
     "selectPrompt": "Select an item in the sidebar."
   },
   "result": {
@@ -186,6 +232,7 @@
     "text": "Text",
     "timed": "With timestamps",
     "json": "JSON",
+    "intelligence": "Intelligence",
     "empty": "No speech was recognized in this file.",
     "emptyHint": "If the file has speech, try again with a larger model or a fixed language (Settings → Transcription).",
     "saved": "File saved.",
@@ -204,6 +251,7 @@
       "general": "General",
       "transcription": "Transcription",
       "live": "Live",
+      "aiLocal": "Local AI",
       "ai": "AI assistants (MCP)",
       "storage": "Storage",
       "help": "Help",
@@ -288,6 +336,104 @@
       "count": "{{count}} components",
       "backToList": "Back to list",
       "openPage": "Open project page"
+    },
+    "aiLocal": {
+      "intro": "Analyse and chat with your transcriptions using models that run on your computer (Ollama). Nothing is sent to the cloud.",
+      "local": {
+        "title": "Ollama",
+        "enabled": "Use local AI (Ollama)",
+        "enabledHint": "Automatic analysis, knowledge search and questions (RAG) become available.",
+        "incremental": "Analyse while transcribing",
+        "final": "Final analysis when it finishes"
+      },
+      "connection": {
+        "title": "Connection",
+        "ollamaUrl": "Ollama address",
+        "ollamaUrlHint": "Usually http://localhost:11434.",
+        "llmModel": "Text model",
+        "embeddingModel": "Embeddings model",
+        "workspaceId": "Knowledge space",
+        "workspaceIdHint": "Separates transcriptions by context (for example, work and personal).",
+        "pull": "Download model",
+        "pulling": "Downloading…",
+        "pullingPercent": "Downloading… {{percent}}%",
+        "pulled": "{{model}} ready.",
+        "allowRemote": "Allow remote Ollama",
+        "allowRemoteHint": "Required to use an Ollama outside this computer and the local network.",
+        "remoteWarning": "With this address, transcriptions will leave this computer and go to {{host}}."
+      },
+      "storage": {
+        "title": "Knowledge storage",
+        "mode": "Backend",
+        "modeHint": "SQLite is the default and needs nothing installed; PostgreSQL speeds up large searches.",
+        "modes": {
+          "fallback": "Local (SQLite)",
+          "external": "Existing PostgreSQL",
+          "local": "PostgreSQL in a container",
+          "auto": "Automatic (recommended)"
+        },
+        "host": "Server",
+        "port": "Port",
+        "database": "Database",
+        "username": "Username",
+        "sslMode": "SSL mode",
+        "connectTimeout": "Connection timeout (s)",
+        "postgresPassword": "PostgreSQL password",
+        "volume": "Data folder (volume)",
+        "volumeHint": "A Docker/Podman volume name or a folder; empty uses the app's default volume.",
+        "image": "Container image",
+        "containerPassword": "Container password",
+        "secretSet": "Password stored in the system vault.",
+        "secretMissing": "No password stored.",
+        "secretSave": "Save password",
+        "secretClear": "Remove password",
+        "secretUnavailable": "The system vault is unavailable; the password lasts only for this session.",
+        "autoHint": "Uses the configured PostgreSQL; otherwise the app's container (Docker/Podman); otherwise SQLite.",
+        "secretAuto": "Without a password, one is generated and kept in the system vault."
+      },
+      "diagnostics": {
+        "title": "Diagnostics",
+        "intro": "Checks Ollama, the models, RAG and the knowledge database.",
+        "run": "Run diagnostics",
+        "names": {
+          "whisper": "Whisper",
+          "ollama": "Ollama",
+          "llm": "Text model",
+          "embeddings": "Embeddings",
+          "rag": "RAG",
+          "postgres": "PostgreSQL",
+          "pgvector": "pgvector"
+        }
+      },
+      "knowledge": {
+        "title": "Knowledge",
+        "intro": "Regenerates the embeddings and index for the whole workspace (use after changing the embeddings model or restoring a backup).",
+        "run": "Reindex knowledge",
+        "disabled": "Turn on local AI to reindex.",
+        "done": "{{count}} items reindexed.",
+        "running": "Reindexing… {{percent}}% ({{completed}}/{{total}})",
+        "cancel": "Cancel",
+        "backup": "Back up",
+        "restore": "Restore",
+        "backupDone": "Backup: {{documents}} documents, {{analyses}} analyses.",
+        "restoreDone": "{{documents}} documents and {{analyses}} analyses restored.",
+        "reindexRequired": "The embeddings model changed. Reindex the knowledge to search by meaning again."
+      },
+      "analysis": {
+        "title": "Analysis",
+        "window": "Analysis window (seconds)",
+        "overlap": "Overlap (seconds)",
+        "overlapHint": "Must be smaller than the window.",
+        "concurrency": "Concurrent analyses",
+        "timeout": "Timeout (seconds)"
+      },
+      "validation": {
+        "required": "Fill in this field.",
+        "number": "Enter a number.",
+        "min": "The minimum is {{min}}.",
+        "overlap": "The overlap must be smaller than the window.",
+        "window": "The window must be larger than the overlap."
+      }
     },
     "ai": {
       "intro": "Let AI assistants on your computer read your transcriptions and request new ones. Nothing leaves your computer.",

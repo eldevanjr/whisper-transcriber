@@ -1,5 +1,6 @@
 import { EventEmitter } from 'node:events'
 import { PassThrough } from 'node:stream'
+import { PROTOCOL_VERSION } from '../../src/main/worker/protocol'
 
 export interface SentCommand {
   id: string
@@ -39,7 +40,7 @@ export class FakeChild extends EventEmitter {
     this.stdout.write(`${JSON.stringify(event)}\n`)
   }
 
-  ready(version = '0.1.0', protocol = 3): void {
+  ready(version = '0.1.0', protocol = PROTOCOL_VERSION): void {
     this.send({ type: 'ready', protocol, version })
   }
 

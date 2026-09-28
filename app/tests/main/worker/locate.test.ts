@@ -1,7 +1,12 @@
 import { mkdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { cudaLibraryDirs, resolveWorkerCommand, workerEnv } from '../../../src/main/worker/locate'
+import {
+  aiWorkerCommand,
+  cudaLibraryDirs,
+  resolveWorkerCommand,
+  workerEnv
+} from '../../../src/main/worker/locate'
 import { makeTempDir } from '../../helpers/tmp'
 
 describe('resolveWorkerCommand', () => {
@@ -83,5 +88,15 @@ describe('workerEnv', () => {
     expect(
       workerEnv({}, { platform: 'linux', device: 'cpu', cudaDir: '/c' }).LD_LIBRARY_PATH
     ).toBeUndefined()
+  })
+})
+
+describe('aiWorkerCommand', () => {
+  it('é o mesmo worker no modo "ai" (processo separado da transcrição)', () => {
+    expect(aiWorkerCommand({ command: 'w', args: ['a'], cwd: '/x' })).toEqual({
+      command: 'w',
+      args: ['a', 'ai'],
+      cwd: '/x'
+    })
   })
 })

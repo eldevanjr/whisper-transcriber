@@ -53,6 +53,9 @@
     "GPU_FAILED": "La GPU falló. La transcripción siguió en la CPU.",
     "LIVE_NOT_STARTED": "No hay ninguna sesión en vivo en curso.",
     "LIVE_ACTIVE": "Ya hay una transcripción en vivo en curso.",
+    "AI_NOT_CONFIGURED": "La IA local no está configurada.",
+    "AI_DISABLED": "La IA local está desactivada en la configuración.",
+    "AI_BLOCKED": "El Ollama configurado está fuera de este equipo/red local. Activa \"Permitir Ollama remoto\" para usarlo.",
     "QUEUE_BUSY": "Espera a que termine la cola (o cancela el archivo actual) para empezar en vivo.",
     "MIC_DENIED": "Se denegó el acceso al micrófono.",
     "MCP_DISABLED": "El acceso de IA está desactivado en Whisper Transcriber (Configuración → Asistentes de IA).",
@@ -177,6 +180,49 @@
       "empty": "Los fragmentos aparecen aquí mientras avanza la transcripción.",
       "seek": "Ir a {{time}}"
     },
+    "intelligence": {
+      "status": "Análisis: {{pending}} pendientes · Indexación: {{percent}}%",
+      "summary": "Resumen",
+      "off": "IA local desactivada.",
+      "fallback": "Usando SQLite (fallback).",
+      "fallbackReason": "Usando SQLite ({{reason}}).",
+      "refresh": "Actualizar",
+      "loading": "Cargando análisis…",
+      "empty": "Sin análisis todavía. Activa la IA local en Configuración.",
+      "kinds": {
+        "topic": "Temas",
+        "task": "Tareas",
+        "decision": "Decisiones",
+        "problem": "Problemas",
+        "question": "Preguntas",
+        "person": "Personas"
+      },
+      "transcription": "Transcripción: {{state}}",
+      "transcriptionStates": {
+        "queued": "en cola",
+        "processing": "en curso",
+        "done": "terminada",
+        "failed": "falló",
+        "canceled": "cancelada",
+        "interrupted": "interrumpida"
+      },
+      "partial": "Análisis parcial — se actualiza mientras avanza la transcripción.",
+      "states": {
+        "UPDATED": "actualizada",
+        "CONFIRMED": "confirmada",
+        "CANCELLED": "cancelada"
+      },
+      "reindexRequired": "El modelo de embeddings cambió. Reindexa el conocimiento en Configuración.",
+      "retry": "Reintentar ({{count}})",
+      "reanalyze": "Reanalizar",
+      "ask": {
+        "label": "Pregunta sobre tus transcripciones",
+        "submit": "Preguntar",
+        "asking": "Pensando…",
+        "sources": "Fuentes",
+        "other": "{{title}} · {{time}}"
+      }
+    },
     "selectPrompt": "Selecciona un elemento en la barra lateral."
   },
   "result": {
@@ -186,6 +232,7 @@
     "text": "Texto",
     "timed": "Con tiempos",
     "json": "JSON",
+    "intelligence": "Inteligencia",
     "empty": "No se reconoció habla en este archivo.",
     "emptyHint": "Si el archivo tiene habla, inténtalo de nuevo con un modelo más grande o con el idioma fijo (Configuración → Transcripción).",
     "saved": "Archivo guardado.",
@@ -204,6 +251,7 @@
       "general": "General",
       "transcription": "Transcripción",
       "live": "En vivo",
+      "aiLocal": "IA local",
       "ai": "IAs (MCP)",
       "storage": "Almacenamiento",
       "help": "Ayuda",
@@ -288,6 +336,104 @@
       "count": "{{count}} componentes",
       "backToList": "Volver a la lista",
       "openPage": "Abrir página del proyecto"
+    },
+    "aiLocal": {
+      "intro": "Analiza y conversa con tus transcripciones usando modelos que se ejecutan en tu computador (Ollama). Nada se envía a la nube.",
+      "local": {
+        "title": "Ollama",
+        "enabled": "Usar IA local (Ollama)",
+        "enabledHint": "El análisis automático, la búsqueda de conocimiento y las preguntas (RAG) quedan disponibles.",
+        "incremental": "Analizar durante la transcripción",
+        "final": "Análisis final al terminar"
+      },
+      "connection": {
+        "title": "Conexión",
+        "ollamaUrl": "Dirección de Ollama",
+        "ollamaUrlHint": "Normalmente http://localhost:11434.",
+        "llmModel": "Modelo de texto",
+        "embeddingModel": "Modelo de embeddings",
+        "workspaceId": "Espacio de conocimiento",
+        "workspaceIdHint": "Separa las transcripciones por contexto (por ejemplo, trabajo y personal).",
+        "pull": "Descargar modelo",
+        "pulling": "Descargando…",
+        "pullingPercent": "Descargando… {{percent}}%",
+        "pulled": "{{model}} listo.",
+        "allowRemote": "Permitir Ollama remoto",
+        "allowRemoteHint": "Necesario para usar un Ollama fuera de este equipo y de la red local.",
+        "remoteWarning": "Con esta dirección, las transcripciones saldrán de este equipo e irán a {{host}}."
+      },
+      "storage": {
+        "title": "Almacenamiento del conocimiento",
+        "mode": "Backend",
+        "modeHint": "SQLite es el predeterminado y no necesita nada instalado; PostgreSQL acelera búsquedas grandes.",
+        "modes": {
+          "fallback": "Local (SQLite)",
+          "external": "PostgreSQL existente",
+          "local": "PostgreSQL en contenedor",
+          "auto": "Automático (recomendado)"
+        },
+        "host": "Servidor",
+        "port": "Puerto",
+        "database": "Base de datos",
+        "username": "Usuario",
+        "sslMode": "Modo SSL",
+        "connectTimeout": "Tiempo límite de conexión (s)",
+        "postgresPassword": "Contraseña de PostgreSQL",
+        "volume": "Carpeta de datos (volumen)",
+        "volumeHint": "Nombre de un volumen de Docker/Podman o una carpeta; vacío usa el volumen predeterminado de la app.",
+        "image": "Imagen del contenedor",
+        "containerPassword": "Contraseña del contenedor",
+        "secretSet": "Contraseña guardada en el cofre del sistema.",
+        "secretMissing": "Ninguna contraseña guardada.",
+        "secretSave": "Guardar contraseña",
+        "secretClear": "Quitar contraseña",
+        "secretUnavailable": "El cofre del sistema no está disponible; la contraseña solo dura esta sesión.",
+        "autoHint": "Usa el PostgreSQL configurado; si no, el contenedor de la app (Docker/Podman); si no, SQLite.",
+        "secretAuto": "Sin contraseña definida, se genera una y se guarda en el almacén del sistema."
+      },
+      "diagnostics": {
+        "title": "Diagnóstico",
+        "intro": "Verifica Ollama, los modelos, el RAG y la base de conocimiento.",
+        "run": "Ejecutar diagnóstico",
+        "names": {
+          "whisper": "Whisper",
+          "ollama": "Ollama",
+          "llm": "Modelo de texto",
+          "embeddings": "Embeddings",
+          "rag": "RAG",
+          "postgres": "PostgreSQL",
+          "pgvector": "pgvector"
+        }
+      },
+      "knowledge": {
+        "title": "Conocimiento",
+        "intro": "Regenera los embeddings y el índice de todo el espacio (úsalo tras cambiar el modelo de embeddings o restaurar un respaldo).",
+        "run": "Reindexar conocimiento",
+        "disabled": "Activa la IA local para reindexar.",
+        "done": "{{count}} elementos reindexados.",
+        "running": "Reindexando… {{percent}}% ({{completed}}/{{total}})",
+        "cancel": "Cancelar",
+        "backup": "Hacer copia",
+        "restore": "Restaurar",
+        "backupDone": "Copia: {{documents}} documentos, {{analyses}} análisis.",
+        "restoreDone": "{{documents}} documentos y {{analyses}} análisis restaurados.",
+        "reindexRequired": "El modelo de embeddings cambió. Reindexa el conocimiento para volver a buscar por significado."
+      },
+      "analysis": {
+        "title": "Análisis",
+        "window": "Ventana de análisis (segundos)",
+        "overlap": "Superposición (segundos)",
+        "overlapHint": "Debe ser menor que la ventana.",
+        "concurrency": "Análisis a la vez",
+        "timeout": "Tiempo límite (segundos)"
+      },
+      "validation": {
+        "required": "Completa este campo.",
+        "number": "Escribe un número.",
+        "min": "El mínimo es {{min}}.",
+        "overlap": "La superposición debe ser menor que la ventana.",
+        "window": "La ventana debe ser mayor que la superposición."
+      }
     },
     "ai": {
       "intro": "Deja que los asistentes de IA de tu computadora lean tus transcripciones y pidan nuevas. Nada sale de tu computadora.",

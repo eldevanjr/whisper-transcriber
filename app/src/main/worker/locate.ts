@@ -26,6 +26,11 @@ export function resolveWorkerCommand(input: {
   }
 }
 
+/** O mesmo worker no modo IA: processo separado, a transcrição nunca espera o Ollama. */
+export function aiWorkerCommand(line: WorkerCommandLine): WorkerCommandLine {
+  return { ...line, args: [...line.args, 'ai'] }
+}
+
 export function cudaLibraryDirs(cudaDir: string): string[] {
   const nvidia = join(cudaDir, 'nvidia')
   if (!existsSync(nvidia)) return []

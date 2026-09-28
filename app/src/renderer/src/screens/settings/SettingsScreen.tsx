@@ -6,6 +6,7 @@ import { Button } from '../../components/Button'
 import { useAppStore } from '../../providers'
 import type { SettingsSection } from '../../store/app-store'
 import { AboutSection } from './AboutSection'
+import { AiLocalSection } from './AiLocalSection'
 import { AiSection } from './AiSection'
 import { GeneralSection } from './GeneralSection'
 import { HelpSection } from './HelpSection'
@@ -18,6 +19,7 @@ const SECTIONS: readonly SettingsSection[] = [
   'general',
   'transcription',
   'live',
+  'aiLocal',
   'ai',
   'storage',
   'help',
@@ -29,6 +31,7 @@ const SECTIONS_CONTENT: Record<SettingsSection, (settings: Settings) => ReactNod
   general: (settings) => <GeneralSection settings={settings} />,
   transcription: (settings) => <TranscriptionSection settings={settings} />,
   live: () => <LiveSection />,
+  aiLocal: (settings) => <AiLocalSection settings={settings} />,
   ai: () => <AiSection />,
   storage: () => <StorageSection />,
   help: () => <HelpSection />,

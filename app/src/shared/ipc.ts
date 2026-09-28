@@ -1,5 +1,6 @@
 import type { ErrorInfo } from './errors'
 import type {
+  AiReindexProgress,
   DownloadEvent,
   DownloadTarget,
   EnqueueResult,
@@ -60,6 +61,20 @@ export const IPC = {
   mcpDisconnect: 'mcp:disconnect',
   mcpTest: 'mcp:test',
   mcpActivity: 'mcp:activity',
+  aiSecretsStatus: 'ai:secrets-status',
+  aiSecretSet: 'ai:secret-set',
+  aiSecretClear: 'ai:secret-clear',
+  aiStatus: 'ai:status',
+  aiAnalysis: 'ai:analysis',
+  aiDiagnose: 'ai:diagnose',
+  aiReindex: 'ai:reindex',
+  aiBackup: 'ai:backup',
+  aiRestore: 'ai:restore',
+  aiPullModel: 'ai:pull-model',
+  aiCancelReindex: 'ai:cancel-reindex',
+  aiReanalyze: 'ai:reanalyze',
+  aiRetry: 'ai:retry',
+  aiAsk: 'ai:ask',
   backgroundReport: 'background:report',
   backgroundShortcutStatus: 'background:shortcut-status',
   backgroundSuspendShortcut: 'background:suspend-shortcut'
@@ -71,6 +86,8 @@ export const EVENTS = {
   settings: 'event:settings',
   update: 'event:update',
   live: 'event:live',
+  ai: 'event:ai',
+  aiReindex: 'event:ai-reindex',
   backgroundCommand: 'event:background-command',
   backgroundNavigate: 'event:background-navigate'
 } as const
@@ -164,6 +181,138 @@ export interface McpTestResult {
   tools: number
 }
 
+/** Senhas guardadas no cofre do sistema (criptografia do SO), não nas settings. */
+export const AI_SECRET_KINDS = ['postgres', 'container'] as const
+export type AiSecretKind = (typeof AI_SECRET_KINDS)[number]
+
+export interface AiSecretsStatus {
+  /** Criptografia do sistema disponível; sem ela, a senha não é gravada em disco. */
+  available: boolean
+  postgres: boolean
+  container: boolean
+}
+
+/** Entidades da análise incremental (worker → UI). */
+export type AiEntityKind = 'topic' | 'task' | 'decision' | 'problem' | 'question' | 'person'
+
+export interface AiAnalysisItem {
+  id: string
+  kind: AiEntityKind
+  text: string
+  detail: string | null
+  confidence: number
+  /** DETECTED/UPDATED/CONFIRMED/CANCELLED (plano §7); null em análises antigas. */
+  state: string | null
+  start: number | null
+  end: number | null
+}
+
+export interface AiAnalysis {
+  summary: string | null
+  items: AiAnalysisItem[]
+  model: string | null
+}
+
+export interface AiIndexProgress {
+  total: number
+  completed: number
+  pending: number
+  failed: number
+}
+
+export interface AiStorageStatus {
+  kind: string
+  fallback: boolean
+  reason: string | null
+}
+
+export interface AiStatus {
+  configured: boolean
+  enabled: boolean
+  pendingAnalysis: number
+  /** Janelas que falharam de vez (dá para tentar de novo). */
+  failedAnalysis: number
+  index: AiIndexProgress
+  storage: AiStorageStatus | null
+  /** Motivo de a IA não rodar (ex.: Ollama fora da rede local sem permissão). */
+  blocked: string | null
+  /** O índice foi gerado com outro modelo de embedding: é preciso reindexar (CA18). */
+  reindexRequired: boolean
+}
+
+/** Trecho que fundamenta uma resposta do RAG (plano §18: clique posiciona o player). */
+export interface AiAnswerSource {
+  transcriptionId: string | null
+  title: string | null
+  text: string
+  start: number | null
+  end: number | null
+}
+
+export interface AiAnswer {
+  answer: string
+  model: string | null
+  sources: AiAnswerSource[]
+}
+
+/** Uma verificação do diagnóstico da pilha de IA (Whisper/Ollama/LLM/embeddings/RAG/PostgreSQL). */
+export interface AiDiagnosticCheck {
+  name: string
+  ok: boolean
+  detail: string | null
+}
+
+/** Backup/restauração do conhecimento e das análises; `null` quando o usuário cancela. */
+export interface AiKnowledgeBackup {
+  documents: number
+  chunks: number
+  analyses: number
+}
+
+/** Modelo baixado via Ollama (`pull`); devolve o nome confirmado. */
+export interface AiPulledModel {
+  model: string
+}
+
+/** Eventos espontâneos da IA local enviados pelo main ao renderer (sem polling). */
+export type AiEvent =
+  | { type: 'status'; status: AiStatus }
+  | { type: 'analysis'; transcriptionId: string; analysis: AiAnalysis; final: boolean }
+  | { type: 'search'; results: unknown[] }
+  | { type: 'pull'; model: string; completed: number; total: number }
+
+/** Commandos de IA local expostos pelo main ao renderer (fonte única da API). */
+export interface AiApi {
+  secretsStatus(): Promise<AiSecretsStatus>
+  setSecret(kind: AiSecretKind, value: string): Promise<AiSecretsStatus>
+  clearSecret(kind: AiSecretKind): Promise<AiSecretsStatus>
+  status(): Promise<AiStatus>
+  /** Análise (tópicos, tarefas, …) da transcrição; vazia quando ainda não há. */
+  analysis(id: string): Promise<AiAnalysis>
+  /** Refaz a análise da transcrição do histórico (substitui a anterior). */
+  reanalyze(id: string): Promise<null>
+  /** Tenta de novo as janelas que falharam; devolve quantas voltaram à fila. */
+  retry(id: string): Promise<number>
+  /** Pergunta ao conhecimento (RAG), com as fontes. */
+  ask(question: string): Promise<AiAnswer>
+  /** Diagnóstico sob demanda: Ollama, LLM, embeddings, RAG e banco. */
+  diagnose(): Promise<AiDiagnosticCheck[]>
+  /** Reindexa o conhecimento do workspace e devolve quantos itens entraram na fila. */
+  reindex(): Promise<number>
+  /** Cancela a reindexação em andamento (no próximo lote). */
+  cancelReindex(): Promise<null>
+  /** Progresso da reindexação, enquanto ela roda (plano §26). */
+  onReindexProgress(callback: (progress: AiReindexProgress) => void): Unsubscribe
+  /** Salva um backup do conhecimento; null se o usuário cancelar. */
+  backup(): Promise<AiKnowledgeBackup | null>
+  /** Restaura um backup escolhido pelo usuário; null se cancelar. */
+  restore(): Promise<AiKnowledgeBackup | null>
+  /** Baixa/atualiza um modelo no Ollama (o resto da IA segue atendendo). */
+  pullModel(model: string): Promise<AiPulledModel>
+  /** Status/análise/busca/pull da IA local, ao vivo (plano §20). */
+  onEvent(callback: (event: AiEvent) => void): Unsubscribe
+}
+
 export interface RetryInput {
   id: string
   sourcePath?: string
@@ -247,6 +396,7 @@ export interface TranscriberApi {
   mcpDisconnect(id: McpClientId): Promise<ClientStatus>
   mcpTest(): Promise<McpTestResult>
   mcpActivity(): Promise<McpActivityLine[]>
+  ai: AiApi
   background: {
     /** Falha ao começar pela bandeja ou microfone perdido: o main notifica. */
     report(report: BackgroundReport): Promise<null>

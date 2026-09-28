@@ -35,7 +35,8 @@ describe('ResultPanel', () => {
       'Trechos',
       'Texto',
       'Com tempos',
-      'JSON'
+      'JSON',
+      'Inteligência'
     ])
     const bubble = screen.getByRole('button', { name: /00:06 Novo assunto\./ })
     await user.click(bubble)
@@ -222,5 +223,14 @@ describe('JsonView', () => {
       { text: '1', kind: 'number' },
       { text: '"a"', kind: 'string' }
     ])
+  })
+})
+
+describe('ResultPanel — Inteligência', () => {
+  it('a aba mostra o painel de status da IA', async () => {
+    const { user } = await setup()
+    await user.click(screen.getByRole('tab', { name: 'Inteligência' }))
+    expect(await screen.findByText('Análise: 0 pendentes · Indexação: 100%')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Atualizar' })).toBeInTheDocument()
   })
 })

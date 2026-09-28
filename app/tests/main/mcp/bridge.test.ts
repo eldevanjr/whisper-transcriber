@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { createConnection, createServer, type Socket } from 'node:net'
 import { join } from 'node:path'
+import type { SearchResult } from 'ai-core-types'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ActivityTracker } from '../../../src/main/mcp/activity-tracker'
 import {
@@ -11,6 +12,7 @@ import {
   ensureSocketDir,
   removeSocket,
   startBridgeServer,
+  type BridgeAi,
   type BridgeQueue
 } from '../../../src/main/mcp/bridge-server'
 import {
@@ -128,6 +130,7 @@ async function harness(
     authTimeoutMs?: number
     tracker?: ActivityTracker
     queue?: BridgeQueue
+    ai?: BridgeAi
     processing?: boolean
     staleSocket?: boolean
   } = {}
@@ -163,6 +166,12 @@ async function harness(
     paths,
     tracker,
     queue,
+    ai: options.ai ?? {
+      knowledge: async () => [],
+      ask: async () => ({ answer: '', model: null, sources: [] }),
+      entities: async () => [],
+      analysis: async () => null
+    },
     settings: { get: () => settings },
     platform: process.platform,
     ...(options.authTimeoutMs === undefined ? {} : { authTimeoutMs: options.authTimeoutMs }),
@@ -673,12 +682,20 @@ describe('createLiveBridge', () => {
       connect: vi.fn(async () => ({ appVersion: '1', ready: true })),
       activity: vi.fn(async () => ({ appRunning: false, current: null, pending: [], live: null })),
       status: vi.fn(async () => null),
+      knowledge: vi.fn(async () => []),
+      ask: vi.fn(async () => ({ answer: '', model: null, sources: [] })),
+      entities: vi.fn(async () => []),
+      analysis: vi.fn(async () => null),
       transcribe: vi.fn(async () => ({ id: randomUUID(), position: 2 }))
     }
     const ensureRunning = vi.fn(async () => undefined)
     const bridge = createLiveBridge({ client, ensureRunning })
     await bridge.activity()
     await bridge.status(randomUUID())
+    await bridge.knowledge('q', 5)
+    await bridge.ask('q', 5)
+    await bridge.entities('topic', undefined, 5)
+    await bridge.analysis(randomUUID())
     expect(ensureRunning).not.toHaveBeenCalled()
     const outcome = await bridge.transcribe('/tmp/a.mp4', 'codex', false)
     expect(ensureRunning).toHaveBeenCalledOnce()
@@ -690,6 +707,10 @@ describe('createLiveBridge', () => {
       connect: vi.fn(),
       activity: vi.fn(),
       status: vi.fn(),
+      knowledge: vi.fn(),
+      ask: vi.fn(),
+      entities: vi.fn(),
+      analysis: vi.fn(),
       transcribe: vi.fn()
     }
     const bridge = createLiveBridge({
@@ -708,11 +729,95 @@ describe('createLiveBridge', () => {
       connect: vi.fn(),
       activity: vi.fn(),
       status: vi.fn(),
+      knowledge: vi.fn(),
+      ask: vi.fn(),
+      entities: vi.fn(),
+      analysis: vi.fn(),
       transcribe: vi.fn(async () => ({ id: randomUUID() }))
     }
     const bridge = createLiveBridge({ client, ensureRunning: async () => undefined })
     await expect(bridge.transcribe('/tmp/a.mp4', 'codex', false)).resolves.toMatchObject({
       status: 'queued'
     })
+  })
+})
+
+describe('bridge knowledge requests', () => {
+  it('answers knowledge, entities and analysis when local AI is on', async () => {
+    const entities = vi.fn(async () => [{ id: 'e' }])
+    const ai: BridgeAi = {
+      knowledge: vi.fn(async () => [{ id: 'k' }] as unknown as SearchResult[]),
+      ask: vi.fn(async () => ({ answer: 'a', model: 'm', sources: [] })),
+      entities,
+      analysis: vi.fn(async () => ({ id: 'a' }))
+    }
+    const context = await trackedHarness({
+      ai,
+      settings: { ai: { ...DEFAULT_SETTINGS.ai, enabled: true } }
+    })
+    const conn = await Conn.open(context.server.address)
+    conn.send({ type: 'auth', rid: 1, token: context.token })
+    await conn.next()
+    conn.send({ type: 'knowledge', rid: 2, query: 'sync', limit: 5 })
+    expect((await conn.next<ResponseShape>()).data).toEqual({ results: [{ id: 'k' }] })
+    conn.send({ type: 'entities', rid: 3, kind: 'topic', limit: 5 })
+    expect((await conn.next<ResponseShape>()).data).toEqual({ entities: [{ id: 'e' }] })
+    conn.send({ type: 'ask', rid: 5, question: 'q', limit: 3 })
+    expect((await conn.next<ResponseShape>()).data).toEqual({
+      answer: 'a',
+      model: 'm',
+      sources: []
+    })
+    conn.send({ type: 'analysis', rid: 4, transcriptionId: randomUUID() })
+    expect((await conn.next<ResponseShape>()).data).toEqual({ analysis: { id: 'a' } })
+    expect(entities).toHaveBeenCalledWith('topic', undefined, 5)
+    conn.end()
+  })
+
+  it('refuses when local AI is off and maps AI errors', async () => {
+    const disabled = await trackedHarness()
+    const first = await Conn.open(disabled.server.address)
+    first.send({ type: 'auth', rid: 1, token: disabled.token })
+    await first.next()
+    first.send({ type: 'knowledge', rid: 2, query: 'q', limit: 5 })
+    expect((await first.next<ResponseShape>()).error?.code).toBe('AI_DISABLED')
+    first.end()
+
+    const failing: BridgeAi = {
+      knowledge: async () => {
+        throw new AppError('AI_NOT_CONFIGURED', 'no')
+      },
+      ask: async () => ({ answer: '', model: null, sources: [] }),
+      entities: async () => [],
+      analysis: async () => null
+    }
+    const context = await trackedHarness({
+      ai: failing,
+      settings: { ai: { ...DEFAULT_SETTINGS.ai, enabled: true } }
+    })
+    const second = await Conn.open(context.server.address)
+    second.send({ type: 'auth', rid: 1, token: context.token })
+    await second.next()
+    second.send({ type: 'knowledge', rid: 2, query: 'q', limit: 5 })
+    expect((await second.next<ResponseShape>()).error?.code).toBe('AI_NOT_CONFIGURED')
+    second.end()
+  })
+
+  it('BridgeClient queries knowledge, entities and analysis', async () => {
+    const context = await trackedHarness({
+      settings: { ai: { ...DEFAULT_SETTINGS.ai, enabled: true } },
+      ai: {
+        knowledge: async () => [{ id: 'k' }] as unknown as SearchResult[],
+        ask: async () => ({ answer: 'a', model: 'm', sources: [] }),
+        entities: async () => [{ id: 'e' }],
+        analysis: async () => ({ id: 'a' })
+      }
+    })
+    const client = new BridgeClient(context.paths)
+    expect(await client.knowledge('q', 5)).toEqual([{ id: 'k' }])
+    expect(await client.ask('q', 3)).toEqual({ answer: 'a', model: 'm', sources: [] })
+    expect(await client.entities('task', undefined, 5)).toEqual([{ id: 'e' }])
+    expect(await client.entities('topic', 'sync', 5)).toEqual([{ id: 'e' }])
+    expect(await client.analysis(randomUUID())).toEqual({ id: 'a' })
   })
 })

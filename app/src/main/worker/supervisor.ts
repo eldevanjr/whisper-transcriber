@@ -10,6 +10,7 @@ import {
   parseWorkerEvent,
   PROTOCOL_VERSION,
   serializeCommand,
+  type AiWorkerEvent,
   type JobEvent,
   type WorkerCommand,
   type WorkerEvent,
@@ -58,11 +59,20 @@ export interface SupervisorOptions {
   sleep?: (ms: number) => Promise<void>
   /** Eventos da sessão ao vivo (não pertencem a um job da fila). */
   onLiveEvent?: (event: LiveWorkerEvent) => void
+  /** Eventos espontâneos da camada de IA (status/análise/busca). */
+  onAiEvent?: (event: AiWorkerEvent) => void
+  /** Um processo novo ficou pronto (o anterior, se havia, perdeu o estado que guardava). */
+  onStarted?: () => void
 }
 
 export const MAX_RESTARTS = 3
 
 const isLiveEvent = (event: WorkerEvent): event is LiveWorkerEvent => event.type.startsWith('live_')
+const isAiEvent = (event: WorkerEvent): event is AiWorkerEvent =>
+  event.type === 'ai_status' ||
+  event.type === 'ai_analysis' ||
+  event.type === 'ai_search' ||
+  event.type === 'ai_pull'
 export const RESTART_WINDOW_MS = 60_000
 
 type StopReason = 'canceled' | 'timeout' | 'crash' | 'mismatch'
@@ -238,6 +248,10 @@ export class WorkerSupervisor implements WorkerPort {
       this.options.onLiveEvent?.(event)
       return
     }
+    if (isAiEvent(event)) {
+      this.options.onAiEvent?.(event)
+      return
+    }
     switch (event.type) {
       case 'ready':
         this.onReady(running, event.protocol, event.version)
@@ -259,6 +273,7 @@ export class WorkerSupervisor implements WorkerPort {
 
   private onReady(running: Running, protocol: number, version: string): void {
     if (protocol === PROTOCOL_VERSION && version === this.options.expectedVersion) {
+      this.options.onStarted?.()
       running.ready.resolve(undefined)
       return
     }

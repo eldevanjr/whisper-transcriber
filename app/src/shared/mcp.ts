@@ -1,3 +1,4 @@
+import type { SearchResult } from 'ai-core-types'
 import { z } from 'zod'
 import { ERROR_CODES, type ErrorCode } from './errors'
 import { PHASES } from './events'
@@ -139,13 +140,62 @@ export type ActivitySnapshot = z.infer<typeof ActivitySnapshotSchema>
 
 const rid = z.number().int()
 
+/** Tipos de entidade detectados pela análise e pesquisáveis pelos MCP. */
+export const KNOWLEDGE_ENTITY_KINDS = [
+  'topic',
+  'task',
+  'decision',
+  'problem',
+  'question',
+  'person'
+] as const
+export type KnowledgeEntityKind = (typeof KNOWLEDGE_ENTITY_KINDS)[number]
+
+/** Resposta fundamentada da IA local, com as fontes usadas (plano §21). */
+export interface KnowledgeAnswer {
+  answer: string
+  model: string | null
+  sources: SearchResult[]
+}
+
+/**
+ * Contratos de conhecimento da IA local compartilhados entre a ponte MCP e o cliente
+ * (evita duplicar os modelos — plano §22 / CA-17).
+ */
+export interface KnowledgePort {
+  knowledge(query: string, limit: number): Promise<SearchResult[]>
+  ask(question: string, limit: number): Promise<KnowledgeAnswer>
+  entities(kind: KnowledgeEntityKind, query: string | undefined, limit: number): Promise<unknown[]>
+  analysis(transcriptionId: string): Promise<unknown>
+}
+
 /** Requisições da ponte, união discriminada por `type` (spec §7.3). */
 export const BridgeRequestSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('auth'), rid, token: z.string() }),
   z.object({ type: z.literal('ping'), rid }),
   z.object({ type: z.literal('activity'), rid }),
   z.object({ type: z.literal('status'), rid, id: z.uuid() }),
-  z.object({ type: z.literal('transcribe'), rid, path: z.string().min(1), client: z.string() })
+  z.object({ type: z.literal('transcribe'), rid, path: z.string().min(1), client: z.string() }),
+  z.object({
+    type: z.literal('knowledge'),
+    rid,
+    query: z.string().min(1).max(500),
+    limit: z.number().int().min(1).max(50)
+  }),
+  z.object({
+    type: z.literal('entities'),
+    rid,
+    kind: z.enum(KNOWLEDGE_ENTITY_KINDS),
+    query: z.string().max(200).optional(),
+    limit: z.number().int().min(1).max(100)
+  }),
+  z.object({
+    type: z.literal('ask'),
+    rid,
+    question: z.string().min(1).max(500),
+    limit: z.number().int().min(1).max(20)
+  }),
+  z.object({ type: z.literal('analysis'), rid, transcriptionId: z.uuid() })
 ])
 export type BridgeRequest = z.infer<typeof BridgeRequestSchema>
 

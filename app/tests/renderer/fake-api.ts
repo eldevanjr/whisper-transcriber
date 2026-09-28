@@ -1,5 +1,6 @@
 import { vi } from 'vitest'
 import type {
+  AiReindexProgress,
   DownloadEvent,
   LiveEvent,
   QueueEvent,
@@ -9,6 +10,15 @@ import type {
 } from '../../src/shared/events'
 import type { HistoryMeta } from '../../src/shared/history'
 import type {
+  AiAnalysis,
+  AiAnswer,
+  AiDiagnosticCheck,
+  AiEvent,
+  AiKnowledgeBackup,
+  AiPulledModel,
+  AiSecretKind,
+  AiSecretsStatus,
+  AiStatus,
   AppInfo,
   BackgroundCommand,
   HistoryDetail,
@@ -18,7 +28,8 @@ import type {
   MonitorVolume,
   NavigateTarget,
   ShortcutStatus,
-  TranscriberApi
+  TranscriberApi,
+  Unsubscribe
 } from '../../src/shared/ipc'
 import {
   MCP_CLIENT_NAMES,
@@ -277,6 +288,91 @@ export class FakeApi implements TranscriberApi {
   mcpTest = vi.fn((): Promise<McpTestResult> => Promise.resolve({ ok: true, tools: 8 }))
 
   mcpActivity = vi.fn((): Promise<McpActivityLine[]> => Promise.resolve([]))
+
+  secretsValue: AiSecretsStatus = { available: true, postgres: false, container: false }
+  secretsStatus = vi.fn((): Promise<AiSecretsStatus> => Promise.resolve({ ...this.secretsValue }))
+  setSecret = vi.fn((kind: AiSecretKind, value: string): Promise<AiSecretsStatus> => {
+    this.secretsValue = { ...this.secretsValue, [kind]: value !== '' }
+    return Promise.resolve({ ...this.secretsValue })
+  })
+  clearSecret = vi.fn((kind: AiSecretKind): Promise<AiSecretsStatus> => {
+    this.secretsValue = { ...this.secretsValue, [kind]: false }
+    return Promise.resolve({ ...this.secretsValue })
+  })
+  aiStatus = vi.fn((): Promise<AiStatus> =>
+    Promise.resolve({
+      configured: true,
+      enabled: true,
+      pendingAnalysis: 0,
+      failedAnalysis: 0,
+      index: { total: 2, completed: 2, pending: 0, failed: 0 },
+      storage: { kind: 'sqlite', fallback: false, reason: null },
+      blocked: null,
+      reindexRequired: false
+    })
+  )
+  aiReanalyze = vi.fn((): Promise<null> => Promise.resolve(null))
+  aiRetry = vi.fn((): Promise<number> => Promise.resolve(1))
+  aiAsk = vi.fn((): Promise<AiAnswer> =>
+    Promise.resolve({ answer: 'Resposta', model: 'qwen3:8b', sources: [] })
+  )
+  aiAnalysis = vi.fn((): Promise<AiAnalysis> =>
+    Promise.resolve({ summary: null, items: [], model: null })
+  )
+  aiDiagnostics = vi.fn((): Promise<AiDiagnosticCheck[]> =>
+    Promise.resolve([
+      { name: 'ollama', ok: true, detail: 'http://localhost:11434 · 2 modelos' },
+      { name: 'postgres', ok: false, detail: 'SQLite (fallback)' }
+    ])
+  )
+  aiReindex = vi.fn((): Promise<number> => Promise.resolve(3))
+  aiCancelReindex = vi.fn((): Promise<null> => Promise.resolve(null))
+  aiReindexListener: ((progress: AiReindexProgress) => void) | null = null
+  aiOnReindexProgress = vi.fn((callback: (progress: AiReindexProgress) => void): Unsubscribe => {
+    this.aiReindexListener = callback
+    return () => {
+      this.aiReindexListener = null
+    }
+  })
+  aiBackup = vi.fn((): Promise<AiKnowledgeBackup | null> =>
+    Promise.resolve({ documents: 2, chunks: 5, analyses: 1 })
+  )
+  aiRestore = vi.fn((): Promise<AiKnowledgeBackup | null> =>
+    Promise.resolve({ documents: 2, chunks: 5, analyses: 1 })
+  )
+  aiPullModel = vi.fn((model: string): Promise<AiPulledModel> => Promise.resolve({ model }))
+  aiEventListener: ((event: AiEvent) => void) | null = null
+  aiEventListeners = new Set<(event: AiEvent) => void>()
+  aiOnEvent = vi.fn((callback: (event: AiEvent) => void): Unsubscribe => {
+    this.aiEventListener = callback
+    this.aiEventListeners.add(callback)
+    return () => {
+      this.aiEventListener = null
+      this.aiEventListeners.delete(callback)
+    }
+  })
+
+  emitAiEvent(event: AiEvent): void {
+    for (const listener of this.aiEventListeners) listener(event)
+  }
+  ai = {
+    secretsStatus: this.secretsStatus,
+    setSecret: this.setSecret,
+    clearSecret: this.clearSecret,
+    status: this.aiStatus,
+    analysis: this.aiAnalysis,
+    diagnose: this.aiDiagnostics,
+    reindex: this.aiReindex,
+    cancelReindex: this.aiCancelReindex,
+    onReindexProgress: this.aiOnReindexProgress,
+    backup: this.aiBackup,
+    restore: this.aiRestore,
+    pullModel: this.aiPullModel,
+    reanalyze: this.aiReanalyze,
+    retry: this.aiRetry,
+    ask: this.aiAsk,
+    onEvent: this.aiOnEvent
+  }
 }
 
 export function makeClientStatus(id: McpClientId, state: ClientState): ClientStatus {

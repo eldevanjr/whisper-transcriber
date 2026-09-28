@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import type { SearchResult } from 'ai-core-types'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { HistoryStore } from '../../../src/main/history/store'
 import { ActivityLog } from '../../../src/main/mcp/activity'
@@ -63,6 +64,10 @@ function fakeBridge(): BridgePort {
   return {
     activity: async () => ({ appRunning: false, current: null, pending: [], live: null }),
     status: async () => null,
+    knowledge: async () => [],
+    ask: async () => ({ answer: '', model: null, sources: [] }),
+    entities: async () => [],
+    analysis: async () => null,
     transcribe: async () => ({ id: randomUUID(), status: 'queued' })
   }
 }
@@ -72,6 +77,7 @@ async function connect(
     enabled?: boolean
     readSettings?: () => Promise<Settings>
     clientName?: string
+    bridge?: BridgePort
   } = {}
 ): Promise<TestContext> {
   const root = join(await makeTempDir(), 'history')
@@ -88,7 +94,7 @@ async function connect(
     library,
     activity,
     readSettings: options.readSettings ?? (async () => settings),
-    bridge: fakeBridge(),
+    bridge: options.bridge ?? fakeBridge(),
     version: '9.9.9'
   })
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
@@ -517,5 +523,53 @@ describe('resources', () => {
     await expect(
       ctx.client.readResource({ uri: `transcription://${randomUUID()}` })
     ).rejects.toThrow(MCP_DISABLED_MESSAGE)
+  })
+})
+
+describe('knowledge tools', () => {
+  it('searches knowledge, entities and reads the analysis', async () => {
+    const bridge: BridgePort = {
+      ...fakeBridge(),
+      knowledge: async (query, limit) => [{ query, limit }] as unknown as SearchResult[],
+      ask: async () => ({ answer: 'a', model: 'm', sources: [] }),
+      entities: async (kind, query, limit) => [{ kind, query, limit }],
+      analysis: async (id) => ({ id })
+    }
+    const ctx = await connectTracked({ bridge })
+    const knowledge = await call(ctx, 'search_knowledge', { query: 'sync', limit: 5 })
+    expect(knowledge.structuredContent).toEqual({ results: [{ query: 'sync', limit: 5 }] })
+
+    const ask = await call(ctx, 'ask_knowledge', { question: 'o que?' })
+    expect(ask.structuredContent).toEqual({ answer: 'a', model: 'm', sources: [] })
+
+    for (const kind of ['topic', 'task', 'decision', 'problem', 'question']) {
+      const result = await call(ctx, `search_${kind}s`, { query: 'q' })
+      expect(result.structuredContent).toEqual({
+        entities: [{ kind, query: 'q', limit: 20 }]
+      })
+    }
+
+    const id = randomUUID()
+    const analysis = await call(ctx, 'get_transcription_analysis', { id })
+    expect(analysis.structuredContent).toEqual({ analysis: { id } })
+  })
+
+  it('handles empty knowledge, empty entities and missing analysis', async () => {
+    const ctx = await connectTracked()
+    const knowledge = await call(ctx, 'search_knowledge', { query: 'x' })
+    expect(knowledge.structuredContent).toEqual({ results: [] })
+    expect(textOf(knowledge)).toContain('No knowledge found')
+
+    const topics = await call(ctx, 'search_topics', {})
+    expect(topics.structuredContent).toEqual({ entities: [] })
+    expect(textOf(topics)).toContain('Nothing found')
+
+    const analysis = await call(ctx, 'get_transcription_analysis', { id: randomUUID() })
+    expect(analysis.structuredContent).toEqual({ analysis: null })
+    expect(textOf(analysis)).toContain('No analysis found')
+
+    const ask = await call(ctx, 'ask_knowledge', { question: 'x' })
+    expect(ask.structuredContent).toEqual({ answer: '', model: null, sources: [] })
+    expect(textOf(ask)).toContain('No answer produced')
   })
 })

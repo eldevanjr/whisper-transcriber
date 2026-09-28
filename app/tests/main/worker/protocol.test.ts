@@ -78,8 +78,8 @@ describe('LineSplitter', () => {
   })
 })
 
-it('versão do protocolo é 3 (transcrição ao vivo)', () => {
-  expect(PROTOCOL_VERSION).toBe(3)
+it('versão do protocolo é 4 (IA em processo próprio)', () => {
+  expect(PROTOCOL_VERSION).toBe(4)
 })
 
 it('eventos do ao vivo (protocolo v3)', () => {
@@ -102,4 +102,28 @@ it('eventos do ao vivo (protocolo v3)', () => {
       '{"type":"live_segment","session_id":"s","track":"alguem","start":1,"end":2,"text":"x"}'
     )
   ).toBeNull()
+})
+
+describe('eventos de IA', () => {
+  it('ai_analysis diz se o resultado é final (worker antigo: parcial)', () => {
+    const final = parseWorkerEvent(
+      JSON.stringify({ type: 'ai_analysis', transcription_id: 't', result: {}, final: true })
+    )
+    expect(final).toEqual({ type: 'ai_analysis', transcription_id: 't', result: {}, final: true })
+    const legacy = parseWorkerEvent(
+      JSON.stringify({ type: 'ai_analysis', transcription_id: 't', result: {} })
+    )
+    expect(legacy).toMatchObject({ final: false })
+  })
+
+  it('serializa os comandos novos da IA', () => {
+    const line = serializeCommand('1', {
+      cmd: 'analysis_append',
+      params: { transcription_id: 't', workspace_id: 'ws', title: 'R', segments: [] }
+    })
+    expect(JSON.parse(line)).toMatchObject({ cmd: 'analysis_append' })
+    expect(
+      JSON.parse(serializeCommand('2', { cmd: 'ai_status', params: { workspace_id: 'ws' } }))
+    ).toMatchObject({ params: { workspace_id: 'ws' } })
+  })
 })

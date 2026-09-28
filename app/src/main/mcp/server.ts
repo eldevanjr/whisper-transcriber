@@ -1,12 +1,14 @@
 import { McpServer, ResourceTemplate } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { ErrorCode, McpError, type Resource } from '@modelcontextprotocol/sdk/types.js'
 import { clientIdOf, type ActivitySnapshot, type JobProgress } from '../../shared/mcp'
+import type { KnowledgePort } from '../../shared/mcp'
 import type { JobStatus } from '../../shared/history'
 import type { Settings } from '../../shared/settings'
 import type { ActivityLog } from './activity'
 import type { ListedTranscription, TranscriptLibrary } from './library'
 import { registerPrompts } from './prompts'
 import { registerActivityTools } from './tools-activity'
+import { registerKnowledgeTools } from './tools-knowledge'
 import { MCP_DISABLED_MESSAGE, registerReadTools, type McpContext } from './tools-read'
 
 /** Resultado de um pedido de transcrição pela ponte (spec §9.8). */
@@ -20,7 +22,7 @@ export interface TranscribeOutcome {
  * Ponte app ↔ processo MCP (spec §7): o app aberto responde atividade, status e transcrever.
  * Implementada por `createLiveBridge` (cliente real) e por dublês de teste.
  */
-export interface BridgePort {
+export interface BridgePort extends KnowledgePort {
   activity(): Promise<ActivitySnapshot>
   status(id: string): Promise<JobProgress | null>
   transcribe(
@@ -56,6 +58,7 @@ export function createMcpServer(deps: McpServerDeps): McpServer {
     clientName: () => clientNameOf(server)
   }
   registerReadTools(server, context)
+  registerKnowledgeTools(server, context, deps.bridge)
   registerActivityTools(server, context, deps.bridge, { now: deps.now, sleep: deps.sleep })
   registerPrompts(server, context)
   registerResources(server, context)

@@ -60,6 +60,7 @@
     "@vitejs/plugin-react": "^5.1.1",
     "@vitest/coverage-v8": "^4.1.11",
     "axe-core": "^4.13.0",
+    "ai-core-types": "file:../../ai-core-types",
     "conventional-changelog-conventionalcommits": "^9.3.1",
     "electron": "^44.4.3",
     "electron-builder": "^26.15.3",

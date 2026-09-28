@@ -44,6 +44,84 @@ export const DEFAULT_TRAY_SETTINGS: TraySettings = {
   notifyAi: true
 }
 
+/** IA local (Ollama) + análise/RAG. O workspace é o contexto lógico do conhecimento. */
+// auto: configurado → container do app já de pé → provisionar → SQLite (plano §9).
+export const STORAGE_MODES = ['fallback', 'external', 'local', 'auto'] as const
+export type StorageMode = (typeof STORAGE_MODES)[number]
+
+export const PostgresSettingsSchema = z.object({
+  host: z.string().min(1),
+  port: z.number().int().min(1).max(65535),
+  database: z.string().min(1),
+  username: z.string().min(1),
+  sslMode: z.string().min(1),
+  connectTimeout: z.number().int().min(1)
+})
+export type PostgresSettings = z.infer<typeof PostgresSettingsSchema>
+
+/** Backend do conhecimento: SQLite (fallback), PostgreSQL já existente ou em container.
+ * A senha não fica aqui: vai para o cofre do sistema (ver `secrets` no main). */
+export const AiStorageSchema = z.object({
+  mode: z.enum(STORAGE_MODES),
+  postgres: PostgresSettingsSchema,
+  volume: z.string(), // pasta de dados do container (modo local)
+  image: z.string().min(1)
+})
+export type AiStorage = z.infer<typeof AiStorageSchema>
+export const DEFAULT_AI_STORAGE: AiStorage = {
+  mode: 'fallback',
+  postgres: {
+    host: '127.0.0.1',
+    port: 5432,
+    database: 'whisper',
+    username: 'whisper',
+    sslMode: 'prefer',
+    connectTimeout: 10
+  },
+  volume: '',
+  image: 'pgvector/pgvector:pg16'
+}
+
+export const AiSettingsSchema = z
+  .object({
+    enabled: z.boolean(),
+    ollamaUrl: z.string().min(1),
+    llmModel: z.string().min(1),
+    embeddingModel: z.string().min(1),
+    incrementalAnalysisEnabled: z.boolean(),
+    finalAnalysisEnabled: z.boolean(),
+    analysisWindowSeconds: z.number().gt(0),
+    analysisOverlapSeconds: z.number().min(0),
+    maxConcurrentAnalysis: z.number().int().min(1).max(16),
+    promptVersion: z.string().min(1),
+    requestTimeoutSeconds: z.number().gt(0),
+    // Ollama num host público só com permissão explícita (plano §24).
+    allowRemoteOllama: z.boolean().default(false),
+    workspaceId: z.string().min(1),
+    storage: AiStorageSchema.default(DEFAULT_AI_STORAGE)
+  })
+  .refine((ai) => ai.analysisOverlapSeconds < ai.analysisWindowSeconds, {
+    message: 'overlap deve ser menor que a janela',
+    path: ['analysisOverlapSeconds']
+  })
+export type AiSettings = z.infer<typeof AiSettingsSchema>
+export const DEFAULT_AI_SETTINGS: AiSettings = {
+  enabled: false,
+  ollamaUrl: 'http://localhost:11434',
+  llmModel: 'qwen3:8b',
+  embeddingModel: 'nomic-embed-text',
+  incrementalAnalysisEnabled: true,
+  finalAnalysisEnabled: true,
+  analysisWindowSeconds: 45,
+  analysisOverlapSeconds: 10,
+  maxConcurrentAnalysis: 1,
+  promptVersion: '1',
+  requestTimeoutSeconds: 120,
+  allowRemoteOllama: false,
+  workspaceId: 'default',
+  storage: DEFAULT_AI_STORAGE
+}
+
 export const SettingsSchema = z.object({
   version: z.literal(1),
   uiLanguage: z.enum(UI_LANGUAGES).nullable(), // null = seguir o idioma do sistema
@@ -58,7 +136,9 @@ export const SettingsSchema = z.object({
   // Configurações de antes do MCP não têm "mcp": entram com o padrão.
   mcp: McpSettingsSchema.default(DEFAULT_MCP_SETTINGS),
   // Configurações de antes da bandeja não têm "tray": entram com o padrão.
-  tray: TraySettingsSchema.default(DEFAULT_TRAY_SETTINGS)
+  tray: TraySettingsSchema.default(DEFAULT_TRAY_SETTINGS),
+  // Configurações de antes da IA local não têm "ai": entram com o padrão (desligada).
+  ai: AiSettingsSchema.default(DEFAULT_AI_SETTINGS)
 })
 export type Settings = z.infer<typeof SettingsSchema>
 
@@ -76,5 +156,6 @@ export const DEFAULT_SETTINGS: Settings = {
   nvidiaTermsAccepted: false,
   live: DEFAULT_LIVE_SETTINGS,
   mcp: DEFAULT_MCP_SETTINGS,
-  tray: DEFAULT_TRAY_SETTINGS
+  tray: DEFAULT_TRAY_SETTINGS,
+  ai: DEFAULT_AI_SETTINGS
 }

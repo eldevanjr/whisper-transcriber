@@ -7,7 +7,12 @@ import { AppError, toAppError } from '../../shared/errors'
 import type { EnqueueResult } from '../../shared/events'
 import type { HistoryMeta } from '../../shared/history'
 import { mediaKindOf } from '../../shared/media'
-import { BridgeRequestSchema, type BridgeRequest, type BridgeResponse } from '../../shared/mcp'
+import {
+  BridgeRequestSchema,
+  type BridgeRequest,
+  type BridgeResponse,
+  type KnowledgePort
+} from '../../shared/mcp'
 import type { Settings } from '../../shared/settings'
 import type { AppPaths } from '../paths'
 import type { ActivityTracker } from './activity-tracker'
@@ -23,6 +28,9 @@ export interface BridgeQueue {
   enqueue(paths: string[], options?: { requestedBy?: string }): Promise<EnqueueResult>
 }
 
+/** Perguntas de conhecimento/análise respondidas pela camada de IA do app. */
+export type BridgeAi = KnowledgePort
+
 export interface BridgeAddressInput {
   paths: AppPaths
   platform: NodeJS.Platform
@@ -35,6 +43,7 @@ export interface BridgeServerDeps {
   paths: AppPaths
   tracker: ActivityTracker
   queue: BridgeQueue
+  ai: BridgeAi
   settings: { get(): Settings }
   platform: NodeJS.Platform
   version: string
@@ -82,6 +91,7 @@ export async function startBridgeServer(deps: BridgeServerDeps): Promise<BridgeS
     authTimeoutMs: deps.authTimeoutMs ?? AUTH_TIMEOUT_MS,
     tracker: deps.tracker,
     queue: deps.queue,
+    ai: deps.ai,
     settings: deps.settings
   }
   const sockets = new Set<Socket>()
@@ -132,6 +142,7 @@ interface ServerContext {
   authTimeoutMs: number
   tracker: ActivityTracker
   queue: BridgeQueue
+  ai: BridgeAi
   settings: { get(): Settings }
 }
 
@@ -200,6 +211,7 @@ class BridgeConnection {
 }
 
 async function respondTo(request: BridgeRequest, context: ServerContext): Promise<BridgeResponse> {
+  if (isKnowledgeRequest(request)) return respondKnowledge(request, context)
   switch (request.type) {
     case 'auth':
       return ok(request.rid, { appVersion: context.version })
@@ -214,6 +226,58 @@ async function respondTo(request: BridgeRequest, context: ServerContext): Promis
       return ok(request.rid, context.tracker.progressOf(request.id))
     case 'transcribe':
       return transcribe(request, context)
+  }
+}
+
+type KnowledgeRequest = Extract<
+  BridgeRequest,
+  { type: 'knowledge' | 'ask' | 'entities' | 'analysis' }
+>
+
+function isKnowledgeRequest(request: BridgeRequest): request is KnowledgeRequest {
+  return (
+    request.type === 'knowledge' ||
+    request.type === 'ask' ||
+    request.type === 'entities' ||
+    request.type === 'analysis'
+  )
+}
+
+async function respondKnowledge(
+  request: KnowledgeRequest,
+  context: ServerContext
+): Promise<BridgeResponse> {
+  switch (request.type) {
+    case 'knowledge':
+      return aiResponse(request.rid, context, async () => ({
+        results: await context.ai.knowledge(request.query, request.limit)
+      }))
+    case 'ask':
+      return aiResponse(request.rid, context, () => context.ai.ask(request.question, request.limit))
+    case 'entities':
+      return aiResponse(request.rid, context, async () => ({
+        entities: await context.ai.entities(request.kind, request.query, request.limit)
+      }))
+    case 'analysis':
+      return aiResponse(request.rid, context, async () => ({
+        analysis: await context.ai.analysis(request.transcriptionId)
+      }))
+  }
+}
+
+/** Responde consultas de IA, bloqueando quando a IA local está desligada. */
+async function aiResponse(
+  rid: number,
+  context: ServerContext,
+  run: () => Promise<unknown>
+): Promise<BridgeResponse> {
+  try {
+    if (!context.settings.get().ai.enabled) {
+      throw new AppError('AI_DISABLED', 'Local AI is turned off in settings.')
+    }
+    return ok(rid, await run())
+  } catch (error) {
+    return { type: 'error', rid, error: toAppError(error).toInfo() }
   }
 }
 

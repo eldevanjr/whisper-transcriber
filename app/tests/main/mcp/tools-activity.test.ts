@@ -43,6 +43,10 @@ function fakeBridge(overrides: Partial<BridgePort> = {}): BridgePort {
   return {
     activity: async () => CLOSED,
     status: async () => null,
+    knowledge: async () => [],
+    ask: async () => ({ answer: '', model: null, sources: [] }),
+    entities: async () => [],
+    analysis: async () => null,
     transcribe: async () => ({ id: randomUUID(), status: 'queued', position: 1 }),
     ...overrides
   }

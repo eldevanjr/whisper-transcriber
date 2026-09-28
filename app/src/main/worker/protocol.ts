@@ -3,7 +3,7 @@ import { AppError, isErrorCode } from '../../shared/errors'
 import { PHASES } from '../../shared/events'
 import { TRACKS, type Device, type Track } from '../../shared/settings'
 
-export const PROTOCOL_VERSION = 3
+export const PROTOCOL_VERSION = 4
 
 const ready = z.object({ type: z.literal('ready'), protocol: z.number(), version: z.string() })
 const heartbeat = z.object({ type: z.literal('heartbeat') })
@@ -74,6 +74,29 @@ const liveError = z.object({
   code: z.string()
 })
 
+const aiStatus = z.object({
+  type: z.literal('ai_status'),
+  status: z.record(z.string(), z.unknown())
+})
+const aiAnalysis = z.object({
+  type: z.literal('ai_analysis'),
+  transcription_id: z.string(),
+  result: z.unknown(),
+  // parcial (janelas até agora) ou final (revisada com a transcrição inteira)
+  final: z.boolean().default(false)
+})
+const aiSearch = z.object({
+  type: z.literal('ai_search'),
+  results: z.array(z.unknown())
+})
+const aiPull = z.object({
+  type: z.literal('ai_pull'),
+  model: z.string(),
+  status: z.string().nullable(),
+  completed: z.number(),
+  total: z.number()
+})
+
 export const WorkerEventSchema = z.discriminatedUnion('type', [
   ready,
   heartbeat,
@@ -86,7 +109,11 @@ export const WorkerEventSchema = z.discriminatedUnion('type', [
   liveSegment,
   liveListening,
   liveLag,
-  liveError
+  liveError,
+  aiStatus,
+  aiAnalysis,
+  aiSearch,
+  aiPull
 ])
 export type WorkerEvent = z.infer<typeof WorkerEventSchema>
 export type JobEvent = Extract<WorkerEvent, { type: 'phase' | 'progress' | 'segment' | 'done' }>
@@ -95,6 +122,52 @@ export type LiveWorkerEvent = Extract<
   WorkerEvent,
   { type: 'live_segment' | 'live_listening' | 'live_lag' | 'live_error' }
 >
+export type AiWorkerEvent = Extract<
+  WorkerEvent,
+  { type: 'ai_status' | 'ai_analysis' | 'ai_search' | 'ai_pull' }
+>
+
+export type AiEntityKind = 'topic' | 'task' | 'decision' | 'problem' | 'question' | 'person'
+
+export interface AiSegmentInput {
+  index: number
+  start: number
+  end: number
+  text: string
+}
+
+export interface ConfigureAiStorageParams {
+  mode: 'fallback' | 'external' | 'local' | 'auto'
+  postgres?: {
+    host: string
+    port: number
+    database: string
+    username: string
+    password: string
+    ssl_mode: string
+    connect_timeout: number
+  }
+  volume?: string
+  password?: string
+  image?: string
+}
+
+export interface ConfigureAiParams {
+  enabled: boolean
+  ollama_url: string
+  llm_model: string
+  embedding_model: string
+  incremental_analysis_enabled: boolean
+  final_analysis_enabled: boolean
+  analysis_window_seconds: number
+  analysis_overlap_seconds: number
+  max_concurrent_analysis: number
+  prompt_version: string
+  request_timeout_seconds: number
+  allow_remote_ollama: boolean
+  database_path: string
+  storage: ConfigureAiStorageParams
+}
 
 export type WorkerCommand =
   | {
@@ -136,6 +209,49 @@ export type WorkerCommand =
   | { cmd: 'live_stop'; params: { session_id: string } }
   | { cmd: 'live_pause'; params: { session_id: string } }
   | { cmd: 'live_finalize'; params: { dir: string; tracks: Track[] } }
+  | { cmd: 'configure_ai'; params: ConfigureAiParams }
+  | {
+      cmd: 'analysis_submit'
+      params: {
+        transcription_id: string
+        workspace_id: string
+        title: string
+        segments: AiSegmentInput[]
+      }
+    }
+  | {
+      cmd: 'analysis_append'
+      params: {
+        transcription_id: string
+        workspace_id: string
+        title: string
+        segments: AiSegmentInput[]
+      }
+    }
+  | { cmd: 'analysis_retry'; params: { transcription_id?: string } }
+  | { cmd: 'analysis_process'; params: { max_items: number } }
+  | { cmd: 'analysis_finalize'; params: { transcription_id: string; workspace_id: string } }
+  | { cmd: 'analysis_get'; params: { workspace_id: string; transcription_id: string } }
+  | { cmd: 'knowledge_search'; params: { workspace_id: string; query: string; limit: number } }
+  | {
+      cmd: 'knowledge_ask'
+      params: { workspace_id: string; question: string; limit: number }
+    }
+  | {
+      cmd: 'knowledge_search_entities'
+      params: { workspace_id: string; kind: AiEntityKind; query?: string; limit: number }
+    }
+  | { cmd: 'knowledge_reindex'; params: { workspace_id: string } }
+  | { cmd: 'knowledge_reindex_cancel'; params: { workspace_id: string } }
+  | {
+      cmd: 'knowledge_delete'
+      params: { workspace_id: string; transcription_id: string }
+    }
+  | { cmd: 'knowledge_backup'; params: { workspace_id: string; path: string } }
+  | { cmd: 'knowledge_restore'; params: { path: string; workspace_id?: string } }
+  | { cmd: 'ai_status'; params?: { workspace_id?: string } }
+  | { cmd: 'ai_diagnose' }
+  | { cmd: 'ai_pull_model'; params: { model: string } }
 
 export function parseWorkerEvent(line: string): WorkerEvent | null {
   let data: unknown

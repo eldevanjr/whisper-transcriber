@@ -6,7 +6,11 @@ import { sanitizeFileName } from '../../shared/media'
 import {
   IPC,
   SEND,
+  AI_SECRET_KINDS,
   type AppInfo,
+  type AiApi,
+  type AiSecretKind,
+  type AiSecretsStatus,
   type BackgroundReport,
   type IpcResult,
   type LiveCapabilities,
@@ -56,6 +60,8 @@ export interface Services {
   appInfo(): AppInfo
   /** "Limpar histórico" também apaga `mcp/activity.jsonl` (spec §12). */
   clearActivity(): Promise<void>
+  /** Histórico limpo: apaga também análises e índice da IA (conhecimento derivado, CA17). */
+  forgetKnowledge(ids: string[]): Promise<void>
   /** Links extras permitidos (páginas dos projetos em Licenças). */
   externalUrls: ReadonlySet<string>
   liveCapabilities(): LiveCapabilities
@@ -78,6 +84,27 @@ export interface Services {
     test(): Promise<McpTestResult>
     activity(): Promise<McpActivityLine[]>
   }
+  /** Senhas de IA no cofre do sistema (nunca nas settings). */
+  aiSecrets: {
+    status(): AiSecretsStatus
+    set(kind: AiSecretKind, value: string): Promise<AiSecretsStatus>
+    clear(kind: AiSecretKind): Promise<AiSecretsStatus>
+  }
+  /** Status e análise da IA local (worker). */
+  ai: Pick<
+    AiApi,
+    | 'status'
+    | 'analysis'
+    | 'diagnose'
+    | 'reindex'
+    | 'cancelReindex'
+    | 'backup'
+    | 'restore'
+    | 'pullModel'
+    | 'reanalyze'
+    | 'retry'
+    | 'ask'
+  >
   background: {
     onStarted(input: LiveStartInput): void
     report(report: BackgroundReport): void
@@ -92,6 +119,8 @@ const SetVersionSchema = z.object({ id: JobId, version: z.enum(['live', 'redo'])
 const ModelIdSchema = z.enum(MODEL_IDS)
 const FormatSchema = z.enum(MODEL_FORMATS)
 const ClientIdSchema = z.enum(MCP_CLIENT_IDS)
+const SecretKindSchema = z.enum(AI_SECRET_KINDS)
+const SecretValueSchema = z.object({ kind: SecretKindSchema, value: z.string().max(4096) })
 const ModelRefSchema = z.object({ id: ModelIdSchema, format: FormatSchema.default('ct2') })
 const TargetSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('model'), id: ModelIdSchema, format: FormatSchema.optional() }),
@@ -175,6 +204,8 @@ export function registerIpcHandlers(
   registerSystem(on, services)
   registerLive(on, services)
   registerMcp(on, services)
+  registerAiSecrets(on, services)
+  registerAi(on, services)
   registerBackground(on, services)
   // Blocos de áudio: canal sem resposta (send), validado e só do renderer do app.
   ipc.on(SEND.liveAudio, (event, raw) => {
@@ -217,6 +248,26 @@ function registerMcp(on: On, s: Services): void {
   on(IPC.mcpTest, None, () => s.mcp.test())
   on(IPC.mcpActivity, None, () => s.mcp.activity())
 }
+function registerAiSecrets(on: On, s: Services): void {
+  on(IPC.aiSecretsStatus, None, () => s.aiSecrets.status())
+  on(IPC.aiSecretSet, SecretValueSchema, ({ kind, value }) => s.aiSecrets.set(kind, value))
+  on(IPC.aiSecretClear, SecretKindSchema, (kind) => s.aiSecrets.clear(kind))
+}
+
+function registerAi(on: On, s: Services): void {
+  on(IPC.aiStatus, None, () => s.ai.status())
+  on(IPC.aiAnalysis, JobId, (id) => s.ai.analysis(id))
+  on(IPC.aiDiagnose, None, () => s.ai.diagnose())
+  on(IPC.aiReindex, None, () => s.ai.reindex())
+  on(IPC.aiCancelReindex, None, () => s.ai.cancelReindex())
+  on(IPC.aiBackup, None, () => s.ai.backup())
+  on(IPC.aiRestore, None, () => s.ai.restore())
+  on(IPC.aiPullModel, z.string().min(1).max(200), (model) => s.ai.pullModel(model))
+  on(IPC.aiReanalyze, JobId, (id) => s.ai.reanalyze(id))
+  on(IPC.aiRetry, JobId, (id) => s.ai.retry(id))
+  on(IPC.aiAsk, z.string().trim().min(1).max(500), (question) => s.ai.ask(question))
+}
+
 function registerBackground(on: On, s: Services): void {
   on(IPC.backgroundReport, ReportSchema, (report) => {
     s.background.report(report)
@@ -256,8 +307,10 @@ function registerHistory(on: On, s: Services): void {
   on(IPC.historyClear, None, async () => {
     if (!s.queue.isIdle())
       throw new AppError('INVALID_REQUEST', 'Aguarde a fila terminar para limpar o histórico')
+    const { entries, corrupted } = await s.history.list()
     const stats = await s.history.clear()
     await s.clearActivity()
+    await s.forgetKnowledge([...entries.map((entry) => entry.id), ...corrupted])
     return stats
   })
 }
