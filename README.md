@@ -108,6 +108,33 @@ Nenhuma porta TCP é aberta: a conversa com a IA é stdio e a ponte com o app é
 (Unix) ou pipe nomeado (Windows), com token novo a cada abertura. Os registros de uso
 (`activity.jsonl`) não guardam o conteúdo das transcrições.
 
+### Inteligência (IA local com Ollama)
+
+Com a **IA local** ligada (Configurações → IA local), cada transcrição — de arquivo ou ao vivo — é
+analisada enquanto anda: resumo, tópicos, tarefas, decisões, problemas, perguntas e pessoas, cada
+item com o trecho de origem (clique para ir ao ponto do áudio). Ao terminar, uma análise final
+revisa tudo com a transcrição inteira. A aba **Inteligência** também responde perguntas sobre as
+suas transcrições (RAG), citando as fontes.
+
+- **Requisitos:** [Ollama](https://ollama.com) rodando (padrão `http://localhost:11434`) com um
+  modelo de texto (sugestão: `qwen3:8b`) e um de embeddings (sugestão: `nomic-embed-text`). Os
+  dois podem ser baixados pela própria tela de configurações.
+- **A transcrição nunca espera a IA:** a análise roda num processo separado e em segundo plano.
+  Com o Ollama lento ou fora do ar, a fila só cresce e é retomada depois — inclusive após fechar
+  o app.
+- **Onde fica o conhecimento:** por padrão em SQLite local. O modo **automático** usa, nesta
+  ordem, um PostgreSQL configurado, o PostgreSQL do app num container (Docker/Podman, com
+  pgvector, exposto só em `127.0.0.1`, senha gerada e guardada no cofre do sistema) e, se nada
+  disso estiver disponível, o SQLite. O que ficou no SQLite migra sozinho quando o PostgreSQL volta.
+- **Privacidade:** nada vai para a nuvem. Um Ollama fora desta máquina/rede local só é usado com
+  **Permitir Ollama remoto** ligado. Excluir uma transcrição apaga também a análise e o índice.
+- Trocar o modelo de embeddings pede **Reindexar conhecimento** (a busca por texto continua
+  funcionando enquanto isso).
+
+As ferramentas `search_topics`, `search_tasks`, `search_decisions`, `search_problems`,
+`search_questions`, `get_transcription_analysis`, `search_knowledge` e `ask_knowledge` expõem esse
+conhecimento às IAs conectadas por MCP.
+
 <sub>Mídias das capturas, todas em domínio público: discurso de John F. Kennedy na Rice University
 (1962) e vídeo da NASA sobre a tripulação da Artemis II, via Wikimedia Commons; contos
 "Miss Dollar" e "O relógio de ouro", de Machado de Assis, na leitura do LibriVox. A conversa
@@ -147,6 +174,9 @@ workflow **Release** manualmente com `version` preenchida e `dry_run` desmarcado
 ## Estrutura
 
 - `worker/` — motor de transcrição em Python (faster-whisper + PyAV), falando JSON Lines por stdin/stdout.
+  O mesmo executável com o argumento `ai` é o processo da IA local (Ollama, análise, RAG,
+  PostgreSQL/pgvector ou SQLite), separado do que transcreve. Depende do pacote irmão `ai-core`
+  (em `../../ai-core`, por enquanto).
 - `app/` — aplicativo Electron + React (main, preload e renderer), com Vitest e Playwright.
 
 ## Desenvolvimento
@@ -168,6 +198,8 @@ pnpm dev                        # abre o app com recarga automática
 | `pnpm gen:licenses`                         | atualiza `resources/third-party-licenses.json` (tela Licenças)           |
 
 No motor: `uv run pytest` (100% de cobertura), `uv run ruff check`, `uv run mypy`.
+`uv run pytest -m integration --no-cov -n 0` inclui o teste com PostgreSQL + pgvector reais
+(precisa de Docker; sobe e remove um container próprio).
 
 No Ubuntu 24, o `chrome-sandbox` do Electron em desenvolvimento precisa de SUID
 (`sudo chown root:root node_modules/electron/dist/chrome-sandbox && sudo chmod 4755 …`)
