@@ -102,7 +102,7 @@ async function configure(
       analysis_overlap_seconds: 10,
       max_concurrent_analysis: 1,
       prompt_version: '1',
-      request_timeout_seconds: 120,
+      request_timeout_seconds: 600,
       allow_remote_ollama: false,
       database_path: database,
       storage: {

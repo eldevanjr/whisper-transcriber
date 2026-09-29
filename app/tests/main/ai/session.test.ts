@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   AiSession,
   DEFAULT_CONTAINER_VOLUME,
+  MAX_WORKER_LINE_BYTES,
   toConfigureParams,
   type AiSecrets,
   type AiSessionDeps
@@ -211,6 +212,43 @@ describe('AiSession — análise', () => {
     await session(port).submit({ transcriptionId: 't', title: 'T', segments: [segment] })
     expect(calls.map((command) => command.cmd)).toEqual(['configure_ai', 'analysis_submit'])
     expect(calls[1]).toMatchObject({ params: { workspace_id: 'default', title: 'T' } })
+  })
+
+  it('transcrição longa vai em lotes que cabem no limite de linha do worker', async () => {
+    const { port, calls } = makeWorker()
+    const long = Array.from({ length: 3000 }, (_, index) => ({
+      index,
+      start: index * 1.4,
+      end: index * 1.4 + 1.4,
+      text: `trecho ${String(index)} com algumas palavras faladas na reunião`
+    }))
+    await session(port).submit({ transcriptionId: 't', title: 'T', segments: long })
+    const sent = calls.filter((command) => command.cmd !== 'configure_ai')
+    expect(sent.length).toBeGreaterThan(2)
+    expect(sent.at(-1)?.cmd).toBe('analysis_submit')
+    expect(sent.slice(0, -1).every((command) => command.cmd === 'analysis_append')).toBe(true)
+    for (const command of sent) {
+      expect(JSON.stringify(command).length).toBeLessThan(MAX_WORKER_LINE_BYTES)
+    }
+    const total = sent.flatMap((command) =>
+      'params' in command && command.params && 'segments' in command.params
+        ? command.params.segments
+        : []
+    )
+    expect(total).toHaveLength(3000)
+  })
+
+  it('append longo também é dividido', async () => {
+    const { port, calls } = makeWorker()
+    const long = Array.from({ length: 2000 }, (_, index) => ({
+      index,
+      start: index,
+      end: index + 1,
+      text: 'fala '.repeat(10)
+    }))
+    await session(port).append({ transcriptionId: 't', title: 'T', segments: long })
+    const appends = calls.filter((command) => command.cmd === 'analysis_append')
+    expect(appends.length).toBeGreaterThan(1)
   })
 
   it('submit e append aceitam workspace explícito', async () => {

@@ -44,6 +44,7 @@ describe('isAllowedExternalUrl', () => {
     ['https://docs.nvidia.com/cuda/eula/index.html', true],
     ['https://ffmpeg.org/download.html', true],
     ['https://huggingface.co/Systran/faster-whisper-medium', true],
+    ['https://ollama.com/download', true],
     ['http://github.com/eldevanjr', false],
     ['https://github.com/outra-pessoa', false],
     ['https://github.com/eldevanjrfake/repo', false],

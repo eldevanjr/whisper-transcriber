@@ -129,6 +129,8 @@ export function normalizeStatus(raw: Record<string, unknown>): AiStatus {
     enabled: raw.enabled === true,
     pendingAnalysis: (analysis.PENDING ?? 0) + (analysis.PROCESSING ?? 0),
     failedAnalysis: analysis.FAILED ?? 0,
+    totalAnalysis: Object.values(analysis).reduce((sum, value) => sum + value, 0),
+    completedAnalysis: analysis.COMPLETED ?? 0,
     index: indexProgress(raw.index),
     storage: storageStatus(raw.storage),
     blocked: stringOf(raw.blocked),

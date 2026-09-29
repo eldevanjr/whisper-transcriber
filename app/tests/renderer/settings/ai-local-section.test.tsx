@@ -17,6 +17,8 @@ const STATUS_OK = {
   enabled: true,
   pendingAnalysis: 0,
   failedAnalysis: 0,
+  totalAnalysis: 0,
+  completedAnalysis: 0,
   index: { total: 0, completed: 0, pending: 0, failed: 0 },
   storage: null,
   blocked: null,
@@ -571,5 +573,32 @@ describe('AiLocalSection — casos de borda', () => {
       api.emitAiEvent({ type: 'search', results: [] })
     })
     expect(await screen.findByText(/Reindexe o conhecimento/)).toBeInTheDocument()
+  })
+})
+
+describe('AiLocalSection — ajuda do Ollama', () => {
+  it('explica os passos e mostra os comandos dos modelos', async () => {
+    await renderWithApp(<AiLocalSection settings={makeSettings()} />)
+    expect(screen.getByRole('heading', { name: 'Como configurar o Ollama' })).toBeInTheDocument()
+    expect(screen.getByText(/ollama pull qwen3:8b/)).toBeInTheDocument()
+    expect(screen.getByText(/ollama pull nomic-embed-text/)).toBeInTheDocument()
+    expect(screen.getByText(/qwen3:4b/)).toBeInTheDocument()
+  })
+
+  it('abre a página de download do Ollama', async () => {
+    const api = new FakeApi()
+    const { user } = await renderWithApp(<AiLocalSection settings={makeSettings()} />, { api })
+    await user.click(screen.getByRole('button', { name: 'Baixar o Ollama' }))
+    expect(api.system.openExternal).toHaveBeenCalledWith('https://ollama.com/download')
+  })
+
+  it('copia os comandos de download', async () => {
+    const api = new FakeApi()
+    const { user } = await renderWithApp(<AiLocalSection settings={makeSettings()} />, { api })
+    await user.click(screen.getByRole('button', { name: 'Copiar comandos' }))
+    expect(api.clipboard.write).toHaveBeenCalledWith(
+      'ollama pull qwen3:8b\nollama pull nomic-embed-text'
+    )
+    expect(await screen.findByText('Copiado!')).toBeInTheDocument()
   })
 })

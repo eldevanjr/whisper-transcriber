@@ -181,7 +181,7 @@
       "seek": "Go to {{time}}"
     },
     "intelligence": {
-      "status": "Analysis: {{pending}} pending · Indexing: {{percent}}%",
+      "status": "Analysis: {{pending}} pending{{analysis}} · Indexing: {{percent}}%",
       "summary": "Summary",
       "off": "Local AI is off.",
       "fallback": "Using SQLite (fallback).",
@@ -221,7 +221,9 @@
         "asking": "Thinking…",
         "sources": "Sources",
         "other": "{{title}} · {{time}}"
-      }
+      },
+      "running": "Analysis in progress… {{pending}} queued.",
+      "analysisProgress": "Analysis progress"
     },
     "selectPrompt": "Select an item in the sidebar."
   },
@@ -361,6 +363,18 @@
         "allowRemote": "Allow remote Ollama",
         "allowRemoteHint": "Required to use an Ollama outside this computer and the local network.",
         "remoteWarning": "With this address, transcriptions will leave this computer and go to {{host}}."
+      },
+      "help": {
+        "title": "How to set up Ollama",
+        "intro": "Local AI uses Ollama on your computer. Nothing is sent to the cloud.",
+        "step1": "Install Ollama on your system (Windows, macOS or Linux).",
+        "download": "Download Ollama",
+        "step2": "Make sure the service is running. Ollama usually starts on its own; if needed, run:",
+        "step3": "Download the models set under “Connection”. Without them, analysis and search won't work:",
+        "copy": "Copy commands",
+        "copied": "Copied!",
+        "step4": "Come back to this screen and click “Run diagnostics” to check Ollama, models, RAG and database.",
+        "tip": "Without a dedicated graphics card, qwen3:8b takes about 1 minute per 45 s excerpt. For faster analysis, use a smaller model such as qwen3:4b (download it with ollama pull qwen3:4b and change the text model above)."
       },
       "storage": {
         "title": "Knowledge storage",

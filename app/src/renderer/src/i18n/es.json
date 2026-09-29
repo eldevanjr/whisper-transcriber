@@ -181,7 +181,7 @@
       "seek": "Ir a {{time}}"
     },
     "intelligence": {
-      "status": "Análisis: {{pending}} pendientes · Indexación: {{percent}}%",
+      "status": "Análisis: {{pending}} pendientes{{analysis}} · Indexación: {{percent}}%",
       "summary": "Resumen",
       "off": "IA local desactivada.",
       "fallback": "Usando SQLite (fallback).",
@@ -221,7 +221,9 @@
         "asking": "Pensando…",
         "sources": "Fuentes",
         "other": "{{title}} · {{time}}"
-      }
+      },
+      "running": "Análisis en curso… {{pending}} en cola.",
+      "analysisProgress": "Progreso del análisis"
     },
     "selectPrompt": "Selecciona un elemento en la barra lateral."
   },
@@ -361,6 +363,18 @@
         "allowRemote": "Permitir Ollama remoto",
         "allowRemoteHint": "Necesario para usar un Ollama fuera de este equipo y de la red local.",
         "remoteWarning": "Con esta dirección, las transcripciones saldrán de este equipo e irán a {{host}}."
+      },
+      "help": {
+        "title": "Cómo configurar Ollama",
+        "intro": "La IA local usa Ollama en tu computadora. Nada se envía a la nube.",
+        "step1": "Instala Ollama en tu sistema (Windows, macOS o Linux).",
+        "download": "Descargar Ollama",
+        "step2": "Confirma que el servicio esté activo. Ollama suele iniciarse solo; si hace falta, ejecuta:",
+        "step3": "Descarga los modelos configurados en “Conexión”. Sin ellos, el análisis y la búsqueda no funcionan:",
+        "copy": "Copiar comandos",
+        "copied": "¡Copiado!",
+        "step4": "Vuelve a esta pantalla y haz clic en “Ejecutar diagnóstico” para revisar Ollama, modelos, RAG y base de datos.",
+        "tip": "Sin tarjeta gráfica dedicada, qwen3:8b tarda cerca de 1 minuto por fragmento de 45 s. Para análisis más rápidos, usa un modelo más pequeño como qwen3:4b (descárgalo con ollama pull qwen3:4b y cambia el modelo de texto arriba)."
       },
       "storage": {
         "title": "Almacenamiento del conocimiento",

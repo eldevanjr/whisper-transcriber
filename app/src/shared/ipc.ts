@@ -232,6 +232,10 @@ export interface AiStatus {
   pendingAnalysis: number
   /** Janelas que falharam de vez (dá para tentar de novo). */
   failedAnalysis: number
+  /** Total de janelas de análise já criadas (completas + pendentes + falhas). */
+  totalAnalysis: number
+  /** Janelas de análise já concluídas. */
+  completedAnalysis: number
   index: AiIndexProgress
   storage: AiStorageStatus | null
   /** Motivo de a IA não rodar (ex.: Ollama fora da rede local sem permissão). */

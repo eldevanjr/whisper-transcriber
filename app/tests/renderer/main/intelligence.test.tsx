@@ -14,6 +14,8 @@ const STATUS: AiStatus = {
   enabled: true,
   pendingAnalysis: 0,
   failedAnalysis: 0,
+  totalAnalysis: 0,
+  completedAnalysis: 0,
   index: { total: 2, completed: 2, pending: 0, failed: 0 },
   storage: { kind: 'sqlite', fallback: false, reason: null },
   blocked: null,
@@ -94,6 +96,8 @@ describe('IntelligencePanel', () => {
       enabled: true,
       pendingAnalysis: 1,
       failedAnalysis: 0,
+      totalAnalysis: 1,
+      completedAnalysis: 0,
       index: { total: 1, completed: 0, pending: 1, failed: 0 },
       storage: null,
       blocked: null,
@@ -102,7 +106,7 @@ describe('IntelligencePanel', () => {
     act(() => {
       api.emitAiEvent({ type: 'status', status: live })
     })
-    expect(await screen.findByText('Análise: 1 pendentes · Indexação: 0%')).toBeInTheDocument()
+    expect(await screen.findByText('Análise: 1 pendentes (0%) · Indexação: 0%')).toBeInTheDocument()
 
     act(() => {
       api.emitAiEvent({ type: 'search', results: [] })
@@ -121,6 +125,25 @@ describe('IntelligencePanel', () => {
       api.emitAiEvent({ type: 'analysis', transcriptionId: ID, analysis: ANALYSIS, final: true })
     })
     expect(await screen.findByText('Reunião sobre sincronização')).toBeInTheDocument()
+  })
+
+  it('mostra o percentual, a barra da análise e o aviso de andamento', async () => {
+    const api = new FakeApi()
+    api.aiStatus.mockResolvedValue({
+      ...STATUS,
+      pendingAnalysis: 2,
+      totalAnalysis: 4,
+      completedAnalysis: 2
+    })
+    await setup(api)
+    expect(
+      await screen.findByText('Análise: 2 pendentes (50%) · Indexação: 100%')
+    ).toBeInTheDocument()
+    expect(screen.getByRole('progressbar', { name: 'Progresso da análise' })).toHaveAttribute(
+      'aria-valuenow',
+      '50'
+    )
+    expect(screen.getByText('Análise em andamento… 2 na fila.')).toBeInTheDocument()
   })
 
   it('mostra o estado desligado', async () => {

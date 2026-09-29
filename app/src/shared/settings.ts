@@ -116,7 +116,7 @@ export const DEFAULT_AI_SETTINGS: AiSettings = {
   analysisOverlapSeconds: 10,
   maxConcurrentAnalysis: 1,
   promptVersion: '1',
-  requestTimeoutSeconds: 120,
+  requestTimeoutSeconds: 600,
   allowRemoteOllama: false,
   workspaceId: 'default',
   storage: DEFAULT_AI_STORAGE

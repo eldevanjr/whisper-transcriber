@@ -15,6 +15,30 @@ import {
 } from '../worker/protocol'
 import type { Logger, WorkerPort } from '../worker/supervisor'
 
+/** Limite de uma linha do protocolo no worker (`MAX_LINE_LENGTH`, 64 KB). */
+export const MAX_WORKER_LINE_BYTES = 64 * 1024
+// Folga para id, comando e os outros parâmetros da linha.
+const BATCH_BYTES = MAX_WORKER_LINE_BYTES - 8 * 1024
+
+/** Divide os trechos em lotes que, serializados, cabem numa linha do protocolo. */
+export function segmentBatches(segments: AiSegmentInput[]): AiSegmentInput[][] {
+  const batches: AiSegmentInput[][] = []
+  let current: AiSegmentInput[] = []
+  let size = 0
+  for (const segment of segments) {
+    const bytes = Buffer.byteLength(JSON.stringify(segment)) + 1
+    if (current.length > 0 && size + bytes > BATCH_BYTES) {
+      batches.push(current)
+      current = []
+      size = 0
+    }
+    current.push(segment)
+    size += bytes
+  }
+  batches.push(current)
+  return batches
+}
+
 /** Volume do PostgreSQL do app quando o usuário não escolhe outro (modo local/automático). */
 export const DEFAULT_CONTAINER_VOLUME = 'whisper-transcriber-pgdata'
 const REINDEX_POLL_MS = 1000
@@ -128,16 +152,32 @@ export class AiSession {
     return this.enabled() || (this.deps.hasData?.() ?? false)
   }
 
-  /** Transcrição concluída: fecha a análise e indexa (refazer substitui o anterior). */
+  /**
+   * Transcrição concluída: fecha a análise e indexa (refazer substitui o anterior).
+   * Transcrição longa vai em lotes (`analysis_append`) e fecha com o último.
+   */
   async submit(input: AiSubmitInput): Promise<void> {
     if (!this.enabled() || input.segments.length === 0) return
-    await this.call({ cmd: 'analysis_submit', params: this.analysisParams(input) })
+    const batches = segmentBatches(input.segments)
+    for (const [position, segments] of batches.entries()) {
+      const params = this.analysisParams({ ...input, segments })
+      await this.call(
+        position === batches.length - 1
+          ? { cmd: 'analysis_submit', params }
+          : { cmd: 'analysis_append', params }
+      )
+    }
   }
 
   /** Trechos novos de uma transcrição em andamento: a análise acompanha. */
   async append(input: AiSubmitInput): Promise<void> {
     if (!this.enabled() || input.segments.length === 0) return
-    await this.call({ cmd: 'analysis_append', params: this.analysisParams(input) })
+    for (const segments of segmentBatches(input.segments)) {
+      await this.call({
+        cmd: 'analysis_append',
+        params: this.analysisParams({ ...input, segments })
+      })
+    }
   }
 
   private analysisParams(input: AiSubmitInput): {

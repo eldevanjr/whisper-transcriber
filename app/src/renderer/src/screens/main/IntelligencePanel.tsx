@@ -33,6 +33,12 @@ function indexPercent(status: AiStatus): number {
   return Math.round((status.index.completed / status.index.total) * 100)
 }
 
+/** Percentual da fila de análise (0–100); 100 quando ainda não há janelas. */
+function analysisPercent(status: AiStatus): number {
+  if (status.totalAnalysis === 0) return 100
+  return Math.round((status.completedAnalysis / status.totalAnalysis) * 100)
+}
+
 function ErrorNote({ error }: { error: unknown }) {
   const { t } = useTranslation()
   return (
@@ -108,15 +114,36 @@ function FallbackNote({ storage }: { storage: AiStorageStatus }) {
 
 function AiStateLine({ status }: { status: AiStatus }) {
   const { t } = useTranslation()
+  if (!status.enabled) {
+    return (
+      <p role="status" className="text-sm text-muted">
+        {t('main.intelligence.off')}
+      </p>
+    )
+  }
+  const percent = analysisPercent(status)
   return (
-    <p role="status" className={status.enabled ? 'text-sm' : 'text-sm text-muted'}>
-      {status.enabled
-        ? t('main.intelligence.status', {
-            pending: status.pendingAnalysis,
-            percent: indexPercent(status)
-          })
-        : t('main.intelligence.off')}
-    </p>
+    <div className="flex flex-col gap-1">
+      <p role="status" className="text-sm">
+        {t('main.intelligence.status', {
+          pending: status.pendingAnalysis,
+          analysis: status.totalAnalysis > 0 ? ` (${String(percent)}%)` : '',
+          percent: indexPercent(status)
+        })}
+      </p>
+      {status.totalAnalysis > 0 && (
+        <div
+          role="progressbar"
+          aria-label={t('main.intelligence.analysisProgress')}
+          aria-valuenow={percent}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          className="h-1.5 w-full overflow-hidden rounded-full bg-surface-2"
+        >
+          <div className="h-full rounded-full bg-accent" style={{ width: `${String(percent)}%` }} />
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -187,17 +214,26 @@ function Body({
   loading,
   analysis,
   partial,
+  pending,
   error
 }: {
   loading: boolean
   analysis: AiAnalysis | null
   partial: boolean
+  pending: number
   error: unknown
 }) {
   const { t } = useTranslation()
   if (loading) return <p className="text-sm text-muted">{t('main.intelligence.loading')}</p>
   if (error !== null) return <ErrorNote error={error} />
   if (analysis === null || (analysis.summary === null && analysis.items.length === 0)) {
+    if (pending > 0) {
+      return (
+        <p role="status" className="text-sm text-muted">
+          {t('main.intelligence.running', { pending })}
+        </p>
+      )
+    }
     return <p className="text-sm text-muted">{t('main.intelligence.empty')}</p>
   }
   return <AnalysisView analysis={analysis} partial={partial} />
@@ -420,7 +456,13 @@ export function IntelligencePanel({
           onRefresh={refresh}
         />
       </div>
-      <Body loading={loading} analysis={analysis} partial={partial} error={error} />
+      <Body
+        loading={loading}
+        analysis={analysis}
+        partial={partial}
+        pending={status?.pendingAnalysis ?? 0}
+        error={error}
+      />
       {status?.enabled === true && <AskBox transcriptionId={transcriptionId} />}
     </div>
   )

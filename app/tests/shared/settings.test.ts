@@ -100,6 +100,7 @@ describe('configurações da IA local', () => {
     expect(DEFAULT_AI_SETTINGS.enabled).toBe(false)
     expect(DEFAULT_AI_SETTINGS.ollamaUrl).toBe('http://localhost:11434')
     expect(DEFAULT_AI_SETTINGS.workspaceId).toBe('default')
+    expect(DEFAULT_AI_SETTINGS.requestTimeoutSeconds).toBe(600)
     expect(SettingsSchema.parse(DEFAULT_SETTINGS).ai).toEqual(DEFAULT_AI_SETTINGS)
   })
 

@@ -19,6 +19,7 @@ import {
 } from '../../components/Fields'
 import { Toggle } from '../../components/Toggle'
 import { useGuard } from '../../hooks/useGuard'
+import { useCopy } from '../../hooks/useCopy'
 import { useSaveSettings } from '../../hooks/useSaveSettings'
 import { useApi } from '../../providers'
 
@@ -431,6 +432,61 @@ function DiagnosticsCard() {
   )
 }
 
+/** Passo a passo para instalar e configurar o Ollama (plano §20). */
+function OllamaHelpCard({
+  llmModel,
+  embeddingModel
+}: {
+  llmModel: string
+  embeddingModel: string
+}) {
+  const { t } = useTranslation()
+  const api = useApi()
+  const { copied, copy } = useCopy()
+  const commands = `ollama pull ${llmModel}\nollama pull ${embeddingModel}`
+
+  return (
+    <SettingsCard title={t('settings.aiLocal.help.title')}>
+      <p className="text-sm text-muted">{t('settings.aiLocal.help.intro')}</p>
+      <ol className="flex list-decimal flex-col gap-4 pl-5 text-sm">
+        <li className="flex flex-col gap-2">
+          <span>{t('settings.aiLocal.help.step1')}</span>
+          <Button
+            size="sm"
+            variant="secondary"
+            className="self-start"
+            onClick={() => void api.system.openExternal('https://ollama.com/download')}
+          >
+            {t('settings.aiLocal.help.download')}
+          </Button>
+        </li>
+        <li className="flex flex-col gap-2">
+          <span>{t('settings.aiLocal.help.step2')}</span>
+          <pre className="overflow-x-auto rounded-lg border border-line bg-surface-2 p-3 text-xs">
+            ollama serve
+          </pre>
+        </li>
+        <li className="flex flex-col gap-2">
+          <span>{t('settings.aiLocal.help.step3')}</span>
+          <pre className="overflow-x-auto rounded-lg border border-line bg-surface-2 p-3 text-xs">
+            {commands}
+          </pre>
+          <Button
+            size="sm"
+            variant="secondary"
+            className="self-start"
+            onClick={() => void copy(commands)}
+          >
+            {copied ? t('settings.aiLocal.help.copied') : t('settings.aiLocal.help.copy')}
+          </Button>
+        </li>
+        <li>{t('settings.aiLocal.help.step4')}</li>
+      </ol>
+      <p className="text-xs text-muted">{t('settings.aiLocal.help.tip')}</p>
+    </SettingsCard>
+  )
+}
+
 /** Reindexação do conhecimento do workspace (plano §26). */
 function ReindexRow({ enabled }: { enabled: boolean }) {
   const { t } = useTranslation()
@@ -655,6 +711,8 @@ export function AiLocalSection({ settings }: { settings: Settings }) {
           }}
         />
       </SettingsCard>
+
+      <OllamaHelpCard llmModel={ai.llmModel} embeddingModel={ai.embeddingModel} />
 
       <StorageCard
         storage={ai.storage}

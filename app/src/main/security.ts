@@ -20,7 +20,8 @@ const EXTERNAL_PREFIXES = [
   'https://docs.nvidia.com/',
   'https://www.nvidia.com/',
   'https://ffmpeg.org/',
-  'https://huggingface.co/'
+  'https://huggingface.co/',
+  'https://ollama.com/'
 ]
 
 // Esquemas do sistema (não https): só estas URLs exatas.

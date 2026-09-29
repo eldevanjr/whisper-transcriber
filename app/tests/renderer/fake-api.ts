@@ -305,6 +305,8 @@ export class FakeApi implements TranscriberApi {
       enabled: true,
       pendingAnalysis: 0,
       failedAnalysis: 0,
+      totalAnalysis: 0,
+      completedAnalysis: 0,
       index: { total: 2, completed: 2, pending: 0, failed: 0 },
       storage: { kind: 'sqlite', fallback: false, reason: null },
       blocked: null,
