@@ -88,7 +88,9 @@ class OllamaClient:
         self._base_url = base_url.rstrip("/")
         self._timeout = timeout
         self._post = post or self._http_post
-        self._stream = stream or self._http_stream
+        # Só ``post`` injetado (testes/dublês): a geração usa a resposta dele como pedaço único.
+        self._stream = stream or (self._single_chunk if post is not None else self._http_stream)
+        self._thinking: dict[str, bool] = {}
 
     @property
     def base_url(self) -> str:
@@ -110,6 +112,19 @@ class OllamaClient:
         if not isinstance(decoded, dict):
             raise OllamaError("Resposta do Ollama não é um objeto JSON")
         return decoded
+
+    def _single_chunk(self, path: str, payload: dict[str, Any]) -> Iterator[dict[str, Any]]:
+        yield self._post(path, payload)
+
+    def supports_thinking(self, model: str) -> bool:
+        """O modelo tem modo de raciocínio (ex.: qwen3)? Consulta ``/api/show`` uma vez."""
+        if model not in self._thinking:
+            try:
+                capabilities = self._post("/api/show", {"model": model}).get("capabilities")
+            except Exception:  # sem a informação, não mexe no raciocínio
+                capabilities = None
+            self._thinking[model] = isinstance(capabilities, list) and "thinking" in capabilities
+        return self._thinking[model]
 
     def _http_stream(self, path: str, payload: dict[str, Any]) -> Iterator[dict[str, Any]]:
         body = json.dumps(payload).encode("utf-8")
@@ -162,8 +177,15 @@ class OllamaClient:
         max_tokens: int | None = None,
         response_format: str | None = None,
         context_tokens: int | None = None,
+        think: bool | None = None,
     ) -> str:
-        """Gera texto via ``/api/generate`` (sem streaming)."""
+        """Gera texto via ``/api/generate`` em streaming.
+
+        Em streaming o tempo limite vale para a *falta* de resposta, não para a geração
+        inteira: numa GPU fraca uma resposta longa leva minutos, mas os tokens chegam.
+        ``think=False`` desliga o raciocínio de modelos que o têm (o qwen3 gastaria
+        centenas de tokens "pensando" antes do JSON); modelos sem ele não recebem o campo.
+        """
         options: dict[str, Any] = {"temperature": temperature}
         if max_tokens is not None:
             options["num_predict"] = max_tokens
@@ -172,18 +194,36 @@ class OllamaClient:
         payload: dict[str, Any] = {
             "model": model,
             "prompt": prompt,
-            "stream": False,
+            "stream": True,
             "options": options,
         }
         if system:
             payload["system"] = system
         if response_format:
             payload["format"] = response_format
-        data = self._post("/api/generate", payload)
-        text = data.get("response")
-        if not isinstance(text, str):
-            raise OllamaError("Resposta inválida do Ollama: campo 'response' ausente")
-        return text
+        if think is not None and self.supports_thinking(model):
+            payload["think"] = think
+        return self._collect(self._stream("/api/generate", payload))
+
+    @staticmethod
+    def _collect(chunks: Iterator[dict[str, Any]]) -> str:
+        """Junta os pedaços de texto do stream; erro no meio vira :class:`OllamaError`."""
+        parts: list[str] = []
+        for chunk in chunks:
+            error = chunk.get("error")
+            if isinstance(error, str):
+                raise OllamaError(f"O Ollama recusou a geração: {error}")
+            piece = chunk.get("response")
+            if isinstance(piece, str):
+                parts.append(piece)
+        if not parts:
+            # HTTP 200 sem nenhum pedaço: o processo do modelo caiu no meio (ex.: a GPU
+            # integrada perdeu o dispositivo com um prompt longo). O log do Ollama tem o motivo.
+            raise OllamaError(
+                "O Ollama encerrou a geração sem resposta: o processo do modelo caiu "
+                "(veja o log do Ollama; prompts longos derrubam algumas GPUs integradas)."
+            )
+        return "".join(parts)
 
     def embed(self, *, model: str, text: str) -> list[float]:
         """Gera embeddings via ``/api/embeddings``."""
@@ -229,6 +269,7 @@ class OllamaLLMProvider(LLMProvider):
         started = time.monotonic()
         response_format = request.metadata.get("format")
         context_tokens = request.metadata.get("num_ctx")
+        think = request.metadata.get("think")
         text = self._client.generate(
             model=model,
             prompt=_compose_prompt(request),
@@ -237,6 +278,7 @@ class OllamaLLMProvider(LLMProvider):
             max_tokens=request.max_tokens,
             response_format=response_format if isinstance(response_format, str) else None,
             context_tokens=context_tokens if isinstance(context_tokens, int) else None,
+            think=think if isinstance(think, bool) else None,
         )
         duration_ms = (time.monotonic() - started) * 1000.0
         return LLMResponse(text=text, model=model, provider=self.name, duration_ms=duration_ms)

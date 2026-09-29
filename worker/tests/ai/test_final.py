@@ -1,8 +1,16 @@
 from __future__ import annotations
 
 from tests.ai.fakes import FakeAnalyzerProvider
+from transcriber_worker.ai.analyzer import PROMPT_BUDGET_CHARS, SYSTEM_PROMPT
 from transcriber_worker.ai.entities import AnalysisResult, Topic
-from transcriber_worker.ai.final import FINAL_CONTEXT_TOKENS, FinalAnalyzer, split_sections
+from transcriber_worker.ai.final import (
+    DEFAULT_SECTION_CHARS,
+    FINAL_CONTEXT_TOKENS,
+    FINAL_MAX_TOKENS,
+    FinalAnalyzer,
+    build_final_prompt,
+    split_sections,
+)
 from transcriber_worker.ai.windows import SegmentInput
 
 SEGMENTS = [SegmentInput(index=0, start=0.0, end=10.0, text="reunião")]
@@ -90,3 +98,22 @@ def test_final_drops_unconfirmed_low_confidence_incremental_items() -> None:
 
 def test_split_sections_of_nothing() -> None:
     assert split_sections([], section_chars=100) == []
+
+
+def test_final_requests_turn_thinking_off_and_allow_a_longer_answer() -> None:
+    provider = FakeAnalyzerProvider(responder=lambda _request: '{"topics": []}')
+    FinalAnalyzer(provider, model="m", enabled=True).run(segments=SEGMENTS, incremental=[])
+    request = provider.requests[0]
+    assert request.metadata["think"] is False
+    assert request.max_tokens == FINAL_MAX_TOKENS
+
+
+def test_default_final_prompt_fits_weak_gpus() -> None:
+    long_segments = [
+        SegmentInput(index=i, start=i * 5.0, end=i * 5.0 + 5.0, text="fala " * 30)
+        for i in range(400)
+    ]
+    incremental = AnalysisResult(topics=[Topic(name=f"tópico {i} " * 5) for i in range(500)])
+    for section in split_sections(long_segments, section_chars=DEFAULT_SECTION_CHARS):
+        prompt = build_final_prompt(section, incremental)
+        assert len(prompt) + len(SYSTEM_PROMPT) <= PROMPT_BUDGET_CHARS

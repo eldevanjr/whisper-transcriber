@@ -86,3 +86,20 @@ def test_stop_without_start_is_harmless() -> None:
     pump.stop()
     pump.wake()
     assert pump.running is False
+
+
+def test_wait_reports_that_a_blocked_lane_is_still_alive() -> None:
+    release = threading.Event()
+    started = threading.Event()
+
+    def blocked() -> Step:
+        started.set()
+        release.wait(10)
+        return Step.IDLE
+
+    pump = AiPump([Lane("index", blocked, idle_seconds=0.01)])
+    pump.start()
+    assert started.wait(5.0)
+    assert pump.wait(timeout=0.05) is False
+    release.set()
+    assert pump.stop(timeout=5.0) is True

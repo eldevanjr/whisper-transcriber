@@ -273,3 +273,13 @@ def test_window_finished_after_forget_leaves_no_partial() -> None:
     item = service.process_next()
     assert item is not None
     assert service.state.partials("t") == []
+
+
+def test_append_ignores_segments_already_received() -> None:
+    service = _service()
+    _open(service)
+    service.append("t", _segments(3))
+    service.append("t", _segments(5))  # reenvio com os 3 primeiros de novo
+    record = service.state.get("t")
+    assert record is not None
+    assert [segment.index for segment in record.segments] == [0, 1, 2, 3, 4]

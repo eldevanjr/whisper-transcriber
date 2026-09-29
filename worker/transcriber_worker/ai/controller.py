@@ -9,6 +9,7 @@ fila: nenhum comando — nem a transcrição, que roda em outro processo — esp
 
 from __future__ import annotations
 
+import json
 import sys
 import threading
 from collections.abc import Callable, Sequence
@@ -74,6 +75,10 @@ class AiController:
         self._lanes: list[str] = []
         self._lock = threading.RLock()
         self._finalizing: set[str] = set()
+        # Perguntas em andamento: as filas não começam outra chamada ao Ollama enquanto isso
+        # (ele atende um pedido por vez, e alguém está esperando a resposta).
+        self._interactive = 0
+        self._signature: str | None = None
 
     @property
     def configured(self) -> bool:
@@ -93,8 +98,12 @@ class AiController:
         storage: StorageConfig | None = None,
     ) -> AiConfig:
         with self._lock:
-            self.close()
             path = database_path or self._database_path
+            signature = self._signature_of(config, path, storage)
+            # Mesma configuração: não derruba o runtime (nem as filas em andamento).
+            if self._runtime is not None and signature == self._signature:
+                return config
+            self.close()
             # IA desligada: só se lê o que já existe; nada de subir container ou conectar.
             wanted = storage if config.enabled else None
 
@@ -107,9 +116,21 @@ class AiController:
                 config, database_path=path, post=self._post, storage_factory=storage_for
             )
             self._runtime = runtime
+            self._signature = signature
             if self._background and config.enabled and runtime.blocked_reason is None:
                 self._start_pump(config)
         return config
+
+    @staticmethod
+    def _signature_of(config: AiConfig, database_path: str, storage: StorageConfig | None) -> str:
+        return json.dumps(
+            {
+                "config": config.model_dump(mode="json"),
+                "database_path": database_path,
+                "storage": storage.model_dump(mode="json") if storage is not None else None,
+            },
+            sort_keys=True,
+        )
 
     def _start_pump(self, config: AiConfig) -> None:
         lanes = [
@@ -122,22 +143,53 @@ class AiController:
         self._pump.start()
 
     def close(self) -> None:
+        """Para as filas sem fechar o banco enquanto um passo ainda o estiver usando."""
         with self._lock:
-            if self._pump is not None:
-                self._pump.stop()
-                self._pump = None
+            pump = self._pump
+            runtime = self._runtime
+            self._pump = None
+            self._runtime = None
             self._lanes = []
-            if self._runtime is not None:
-                self._runtime.close()
-                self._runtime = None
+            self._signature = None
+        if pump is None:
+            if runtime is not None:
+                runtime.close()
+            return
+        pump.stop()
+        if runtime is None:
+            return
+        # O passo em andamento pode estar dentro de uma chamada ao Ollama (até o timeout):
+        # só fecha o runtime depois que ele sair, senão a thread usaria o banco fechado.
+        if pump.wait(timeout=runtime.config.request_timeout_seconds + 5):
+            runtime.close()
+            return
+        self._retire(pump, runtime)
+
+    @staticmethod
+    def _retire(pump: AiPump, runtime: AiRuntime) -> None:
+        """Fecha o runtime antigo em segundo plano, quando as lanes finalmente pararem."""
+
+        def finish() -> None:
+            pump.wait()
+            runtime.close()
+
+        threading.Thread(target=finish, name="ai-retire", daemon=True).start()
 
     def shutdown(self) -> None:
         """App fechando: para o processamento e o PostgreSQL local do app."""
         with self._lock:
+            pump = self._pump
             runtime = self._runtime
-            if runtime is not None:
-                runtime.shutdown()
-            self.close()
+            self._pump = None
+            self._runtime = None
+            self._lanes = []
+            self._signature = None
+        if pump is not None:
+            pump.stop()
+            pump.wait()
+        if runtime is not None:
+            runtime.shutdown()
+            runtime.close()
 
     def _wake(self) -> None:
         if self._pump is not None:
@@ -232,11 +284,13 @@ class AiController:
             known = {segment.index for segment in record.segments}
             fresh = [segment for segment in segments if segment.index not in known]
         items = service.close(transcription_id, fresh)
+        # O app manda transcrições longas em lotes: indexa tudo o que chegou, não só o último.
+        closed = service.state.get(transcription_id)
         outcome = runtime.indexer.index_transcription(
             workspace_id=workspace_id,
             transcription_id=transcription_id,
             title=title,
-            segments=segments,
+            segments=closed.segments if closed is not None else segments,
         )
         self._wake()
         self._emit_status()
@@ -265,7 +319,7 @@ class AiController:
 
     def _analysis_step(self) -> Step:
         runtime = self._runtime
-        if runtime is None:
+        if runtime is None or self._interactive:
             return Step.IDLE
         item = runtime.service.process_next()
         if item is None:
@@ -388,7 +442,14 @@ class AiController:
 
     def ask(self, *, workspace_id: str, question: str, limit: int) -> dict[str, Any]:
         runtime = self._require_active()
-        result = runtime.answer.ask(workspace_id=workspace_id, question=question, limit=limit)
+        with self._lock:
+            self._interactive += 1
+        try:
+            result = runtime.answer.ask(workspace_id=workspace_id, question=question, limit=limit)
+        finally:
+            with self._lock:
+                self._interactive -= 1
+            self._wake()
         return {
             "answer": result.answer,
             "model": result.model,

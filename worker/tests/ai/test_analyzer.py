@@ -5,7 +5,9 @@ from ai_core import LLMProvider, LLMResponse, ProviderLocation
 
 from tests.ai.fakes import FakeAnalyzerProvider
 from transcriber_worker.ai.analyzer import (
+    CONTEXT_TOKENS,
     SYSTEM_PROMPT,
+    WINDOW_MAX_TOKENS,
     AnalysisError,
     IncrementalAnalyzer,
     build_analysis_prompt,
@@ -181,3 +183,23 @@ def test_non_object_entities_are_rejected() -> None:
     analyzer = IncrementalAnalyzer(provider, model="m")
     with pytest.raises(AnalysisError):
         analyzer.analyze_window(start=12.0, end=20.0, text="", segments=WINDOW)
+
+
+def test_window_requests_turn_thinking_off_and_cap_the_output() -> None:
+    provider = FakeAnalyzerProvider()
+    IncrementalAnalyzer(provider, model="m").analyze_window(start=0.0, end=1.0, text="x")
+    request = provider.requests[0]
+    assert request.metadata["think"] is False
+    assert request.max_tokens == WINDOW_MAX_TOKENS
+
+
+def test_system_prompt_forbids_generic_people() -> None:
+    assert "Pessoa 1" in SYSTEM_PROMPT
+    assert "nome" in SYSTEM_PROMPT
+
+
+def test_every_request_uses_the_same_context_size() -> None:
+    # Mudar num_ctx entre pedidos obriga o Ollama a recarregar o modelo (15 s ou mais).
+    provider = FakeAnalyzerProvider()
+    IncrementalAnalyzer(provider, model="m").analyze_window(start=0.0, end=1.0, text="x")
+    assert provider.requests[0].metadata["num_ctx"] == CONTEXT_TOKENS

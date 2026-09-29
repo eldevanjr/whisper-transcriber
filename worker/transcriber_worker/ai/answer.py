@@ -12,6 +12,7 @@ from typing import Any
 from ai_core import LLMProvider, LLMRequest, SearchResult
 from pydantic import BaseModel, Field
 
+from transcriber_worker.ai.analyzer import CONTEXT_TOKENS
 from transcriber_worker.ai.rag import KnowledgeQuery
 
 GROUNDING_PROMPT = (
@@ -19,6 +20,13 @@ GROUNDING_PROMPT = (
     "suficiente, diga que não encontrou. Cite os timestamps quando disponíveis e "
     "diferencie fato de inferência. Não invente informações."
 )
+
+
+# Resposta curta e sem raciocínio: a pergunta é interativa (alguém está esperando).
+ANSWER_MAX_TOKENS = 1024
+# Contexto recuperado que vai no prompt: acima disso GPUs integradas derrubam o Ollama
+# (e o prompt longo levaria minutos só para ser lido).
+ANSWER_CONTEXT_CHARS = 6_000
 
 
 class AnswerResult(BaseModel):
@@ -45,19 +53,39 @@ class KnowledgeAnswer:
 
     def ask(self, *, workspace_id: str, question: str, limit: int = 5) -> AnswerResult:
         results = self._query.search(workspace_id=workspace_id, query=question, limit=limit)
+        used, context = _fit_context(results, ANSWER_CONTEXT_CHARS)
         request = LLMRequest(
             model=self._model,
             system_prompt=self._system_prompt,
             user_prompt=question,
-            context=[context_of(result) for result in results],
+            context=context,
             temperature=0.0,
+            max_tokens=ANSWER_MAX_TOKENS,
+            metadata={"think": False, "num_ctx": CONTEXT_TOKENS},
         )
         response = self._provider.generate(request)
         return AnswerResult(
             answer=response.text,
-            sources=results,
+            sources=used,
             model=response.model or self._model,
         )
+
+
+def _fit_context(results: list[SearchResult], budget: int) -> tuple[list[SearchResult], list[str]]:
+    """Trechos mais relevantes que cabem no orçamento; o primeiro entra mesmo cortado."""
+    used: list[SearchResult] = []
+    context: list[str] = []
+    remaining = budget
+    for result in results:
+        text = context_of(result)
+        if len(text) > remaining:
+            if context:
+                break
+            text = text[:remaining]
+        used.append(result)
+        context.append(text)
+        remaining -= len(text)
+    return used, context
 
 
 def context_of(result: SearchResult) -> str:

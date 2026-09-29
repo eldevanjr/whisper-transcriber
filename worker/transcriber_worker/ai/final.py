@@ -14,16 +14,18 @@ from collections.abc import Sequence
 
 from ai_core import LLMProvider
 
-from transcriber_worker.ai.analyzer import SYSTEM_PROMPT, IncrementalAnalyzer
+from transcriber_worker.ai.analyzer import CONTEXT_TOKENS, SYSTEM_PROMPT, IncrementalAnalyzer
 from transcriber_worker.ai.consolidation import consolidate_results, reconcile
 from transcriber_worker.ai.entities import AnalysisResult
 from transcriber_worker.ai.windows import SegmentInput
 
-# Janela de contexto pedida ao Ollama na passada final (o padrão dele é bem menor).
-FINAL_CONTEXT_TOKENS = 16384
-# ~3 caracteres por token em português: a seção + prompt cabem folgados no contexto acima.
-DEFAULT_SECTION_CHARS = 24_000
-_CONTEXT_CHARS = 4_000
+# O mesmo contexto das janelas (sem recarregar o modelo no Ollama).
+FINAL_CONTEXT_TOKENS = CONTEXT_TOKENS
+# Seção + itens auxiliares + sistema ficam dentro de PROMPT_BUDGET_CHARS (GPUs fracas).
+DEFAULT_SECTION_CHARS = 6_000
+# A passada final consolida uma seção inteira: resposta maior que a de uma janela.
+FINAL_MAX_TOKENS = 2048
+_CONTEXT_CHARS = 2_000
 
 
 def _line(segment: SegmentInput) -> str:
@@ -111,6 +113,7 @@ class FinalAnalyzer:
                 segments=section,
                 prompt=build_final_prompt(section, consolidated),
                 context_tokens=FINAL_CONTEXT_TOKENS,
+                max_tokens=FINAL_MAX_TOKENS,
             )
             for section in split_sections(segments, section_chars=self._section_chars)
         ]

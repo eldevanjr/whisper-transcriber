@@ -106,10 +106,15 @@ class AiPump:
         for lane in self._lanes:
             lane.wake()
 
-    def stop(self, timeout: float = 5.0) -> None:
-        """Para as lanes; um passo em andamento termina (o item volta à fila na reabertura)."""
+    def stop(self, timeout: float = 5.0) -> bool:
+        """Sinaliza a parada e espera as lanes; devolve True se todas terminaram."""
         for lane in self._lanes:
             lane.stop()
-        for thread in self._threads:
+        return self.wait(timeout)
+
+    def wait(self, timeout: float | None = None) -> bool:
+        """Espera as threads terminarem; devolve True se nenhuma continuar viva."""
+        for thread in list(self._threads):
             thread.join(timeout)
         self._threads = [thread for thread in self._threads if thread.is_alive()]
+        return not self._threads

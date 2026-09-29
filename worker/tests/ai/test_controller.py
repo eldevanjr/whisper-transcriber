@@ -4,7 +4,7 @@ import threading
 import time
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
@@ -13,6 +13,8 @@ from transcriber_worker.ai.analysis_store import EntityKind
 from transcriber_worker.ai.config import AiConfig
 from transcriber_worker.ai.controller import AiController
 from transcriber_worker.ai.ollama import OllamaUnavailableError
+from transcriber_worker.ai.pump import AiPump, Step
+from transcriber_worker.ai.runtime import AiRuntime
 from transcriber_worker.ai.storage import (
     StorageBackend,
     StorageConfig,
@@ -351,6 +353,76 @@ def test_background_pump_uses_the_configured_concurrency() -> None:
     controller.close()
 
 
+def test_reconfigure_with_the_same_settings_keeps_the_runtime() -> None:
+    controller, _ = _controller()
+    first = controller._runtime
+    controller.configure(AiConfig(enabled=True))
+    assert controller._runtime is first
+
+
+def test_close_without_runtime_is_harmless() -> None:
+    AiController(Recorder(), post=_post).close()
+
+
+def test_close_with_pump_but_no_runtime() -> None:
+    controller = AiController(Recorder(), post=_post)
+
+    class Pump:
+        def stop(self, timeout: float = 5.0) -> bool:
+            return False
+
+    controller._pump = cast(AiPump, Pump())
+    controller.close()
+    assert controller._pump is None
+
+
+def test_shutdown_stops_the_background_pump() -> None:
+    controller, _ = _controller(background=True)
+    assert controller.lanes
+    controller.shutdown()
+    assert controller.configured is False
+    assert controller.lanes == []
+
+
+def test_retire_closes_the_runtime_after_the_lanes_stop() -> None:
+    closed: list[bool] = []
+
+    class Pump:
+        def wait(self, timeout: float | None = None) -> bool:
+            return True
+
+    class Runtime:
+        def close(self) -> None:
+            closed.append(True)
+
+    AiController._retire(cast(AiPump, Pump()), cast(AiRuntime, Runtime()))
+    _wait_until(lambda: closed == [True])
+
+
+def test_close_retires_when_a_step_never_stops() -> None:
+    controller = AiController(Recorder(), post=_post)
+    retired: list[bool] = []
+
+    class Pump:
+        def stop(self, timeout: float = 5.0) -> bool:
+            return False
+
+        def wait(self, timeout: float | None = None) -> bool:
+            return False
+
+    class Runtime:
+        config = AiConfig(enabled=True)
+
+        def close(self) -> None:
+            retired.append(True)
+
+    # As filas ainda têm um passo preso: o banco não pode ser fechado agora.
+    controller._pump = cast(AiPump, Pump())
+    controller._runtime = cast(AiRuntime, Runtime())
+    controller.close()
+    _wait_until(lambda: retired == [True])
+
+
 def test_steps_without_runtime_are_idle(capsys: pytest.CaptureFixture[str]) -> None:
     from transcriber_worker.ai.controller import _log
     from transcriber_worker.ai.pump import Step
@@ -385,3 +457,38 @@ def test_disabled_ai_never_provisions_postgres() -> None:
     assert received[-1] is None  # só leitura do que já existe: nada de container
     controller.configure(AiConfig(enabled=True), storage=StorageConfig(mode=StorageMode.LOCAL))
     assert received[-1] == StorageConfig(mode=StorageMode.LOCAL)
+
+
+def test_questions_have_priority_over_background_analysis() -> None:
+    controller, _ = _controller()
+    _submit(controller)
+    seen: list[bool] = []
+    original = controller._analysis_step
+
+    def during_ask(request: Any) -> Any:
+        # Enquanto a pergunta roda, as filas não começam outra chamada ao Ollama.
+        seen.append(controller._analysis_step() is Step.IDLE)
+        return answer_generate(request)
+
+    runtime = controller._require()
+    answer_generate = runtime.answer._provider.generate
+    runtime.answer._provider = cast(Any, type("P", (), {"generate": staticmethod(during_ask)})())
+    controller.ask(workspace_id="ws", question="o que foi dito?", limit=3)
+    assert seen == [True]
+    assert original() is Step.DONE  # depois da pergunta, a análise segue
+
+
+def test_batched_submit_indexes_the_whole_transcription() -> None:
+    controller, _ = _controller()
+    segments = [
+        SegmentInput(index=i, start=i * 10.0, end=i * 10.0 + 10.0, text=f"assunto {i} " * 300)
+        for i in range(4)
+    ]
+    controller.append(transcription_id="t", workspace_id="ws", title="R", segments=segments[:3])
+    result = controller.submit(
+        transcription_id="t", workspace_id="ws", title="R", segments=segments[3:]
+    )
+    assert result["chunks"] >= 2  # os lotes anteriores entram no índice, não só o último
+    controller.process(max_items=50)
+    hits = controller.search(workspace_id="ws", query="assunto 0", limit=5)
+    assert any("assunto 0" in hit["chunk"]["content"] for hit in hits)

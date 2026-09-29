@@ -101,7 +101,12 @@ class AnalysisState:
         record = self.get(transcription_id)
         if record is None:
             return
-        merged = [*record.segments, *segments]
+        # Reenvio (lotes, ou a transcrição inteira no fim) não duplica trechos já recebidos.
+        known = {segment.index for segment in record.segments}
+        merged = [
+            *record.segments,
+            *(segment for segment in segments if segment.index not in known),
+        ]
         with self._store.locked() as conn:
             conn.execute(
                 "UPDATE ai_transcriptions SET segments = ? WHERE transcription_id = ?",

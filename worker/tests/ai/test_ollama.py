@@ -168,7 +168,7 @@ def test_generate_builds_payload_with_system_and_limit() -> None:
     assert path == "/api/generate"
     assert payload["model"] == "qwen3:8b"
     assert payload["system"] == "seja breve"
-    assert payload["stream"] is False
+    assert payload["stream"] is True
     assert payload["options"] == {"temperature": 0.3, "num_predict": 64}
 
 
@@ -348,3 +348,95 @@ def test_provider_location_follows_url(
     assert OllamaLLMProvider(client, default_model="m").location is location
     assert OllamaEmbeddingProvider(client, default_model="m").location is location
     assert is_loopback_url(url) is loopback
+
+
+class _Streamer:
+    """Stream falso de /api/generate: devolve os pedaços e guarda os payloads."""
+
+    def __init__(self, chunks: list[dict[str, Any]]) -> None:
+        self.chunks = chunks
+        self.payloads: list[dict[str, Any]] = []
+
+    def __call__(self, path: str, payload: dict[str, Any]) -> Iterator[dict[str, Any]]:
+        assert path == "/api/generate"
+        self.payloads.append(payload)
+        return iter(self.chunks)
+
+
+def _show(capabilities: list[str] | None) -> _Recorder:
+    body: dict[str, Any] = {} if capabilities is None else {"capabilities": capabilities}
+    return _Recorder({"/api/show": body})
+
+
+def test_generate_streams_and_joins_the_response() -> None:
+    streamer = _Streamer([{"response": '{"a"'}, {"response": ": 1}"}, {"done": True}])
+    client = OllamaClient("http://x", post=_show([]), stream=streamer)
+    assert client.generate(model="m", prompt="p") == '{"a": 1}'
+    assert streamer.payloads[0]["stream"] is True
+
+
+def test_generate_turns_thinking_off_only_for_thinking_models() -> None:
+    thinking = _Streamer([{"response": "ok"}])
+    client = OllamaClient("http://x", post=_show(["completion", "thinking"]), stream=thinking)
+    client.generate(model="qwen3:8b", prompt="p", think=False)
+    client.generate(model="qwen3:8b", prompt="p", think=False)
+    assert thinking.payloads[0]["think"] is False
+    plain = _Streamer([{"response": "ok"}])
+    other = OllamaClient("http://x", post=_show(["completion"]), stream=plain)
+    other.generate(model="llama3", prompt="p", think=False)
+    assert "think" not in plain.payloads[0]
+
+
+def test_capability_probe_is_cached_per_model() -> None:
+    recorder = _show(["thinking"])
+    client = OllamaClient("http://x", post=recorder, stream=_Streamer([{"response": "ok"}]))
+    client.generate(model="qwen3:8b", prompt="p", think=False)
+    client.generate(model="qwen3:8b", prompt="p", think=False)
+    assert [path for path, _payload in recorder.calls] == ["/api/show"]
+
+
+def test_capability_probe_failure_leaves_thinking_untouched() -> None:
+    def broken(path: str, payload: dict[str, Any] | None) -> dict[str, Any]:
+        raise OllamaError("show indisponível")
+
+    streamer = _Streamer([{"response": "ok"}])
+    client = OllamaClient("http://x", post=broken, stream=streamer)
+    client.generate(model="m", prompt="p", think=False)
+    assert "think" not in streamer.payloads[0]
+    old = _Streamer([{"response": "ok"}])
+    OllamaClient("http://x", post=_show(None), stream=old).generate(
+        model="m", prompt="p", think=False
+    )
+    assert "think" not in old.payloads[0]
+
+
+def test_generate_reports_errors_sent_in_the_stream() -> None:
+    client = OllamaClient("http://x", post=_show([]), stream=_Streamer([{"error": "sem memória"}]))
+    with pytest.raises(OllamaError, match="sem memória"):
+        client.generate(model="m", prompt="p")
+
+
+def test_generate_without_text_is_invalid() -> None:
+    client = OllamaClient("http://x", post=_show([]), stream=_Streamer([{"done": True}]))
+    with pytest.raises(OllamaError, match="sem resposta"):
+        client.generate(model="m", prompt="p")
+
+
+def test_injected_post_also_serves_generate() -> None:
+    recorder = _Recorder({"/api/generate": {"response": "texto"}})
+    assert OllamaClient("http://x", post=recorder).generate(model="m", prompt="p") == "texto"
+
+
+def test_llm_provider_forwards_thinking_preference() -> None:
+    streamer = _Streamer([{"response": "{}"}])
+    client = OllamaClient("http://x", post=_show(["thinking"]), stream=streamer)
+    provider = OllamaLLMProvider(client, default_model="m")
+    provider.generate(LLMRequest(user_prompt="p", metadata={"think": False}, max_tokens=512))
+    assert streamer.payloads[0]["think"] is False
+    assert streamer.payloads[0]["options"]["num_predict"] == 512
+
+
+def test_empty_stream_explains_that_the_model_process_died() -> None:
+    client = OllamaClient("http://x", post=_show([]), stream=_Streamer([]))
+    with pytest.raises(OllamaError, match="caiu"):
+        client.generate(model="m", prompt="p")

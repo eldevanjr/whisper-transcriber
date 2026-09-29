@@ -42,3 +42,8 @@ def test_bounds(overrides: dict[str, float]) -> None:
 def test_extra_forbidden() -> None:
     with pytest.raises(ValidationError):
         AiConfig.model_validate({"unknown": 1})
+
+
+def test_default_timeout_tolerates_slow_gpus() -> None:
+    # Em streaming o limite é de inatividade: 10 min cobre esperar a passada final na GPU.
+    assert AiConfig().request_timeout_seconds == 600.0
