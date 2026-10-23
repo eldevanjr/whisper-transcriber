@@ -1,4 +1,5 @@
 import { execFile, spawn } from 'node:child_process'
+import { createReadStream, createWriteStream } from 'node:fs'
 import { readFile, rm, writeFile } from 'node:fs/promises'
 import { release, totalmem } from 'node:os'
 import { join } from 'node:path'
@@ -568,10 +569,13 @@ async function runConnectorAction(
 /** Modo MCP (argv `--mcp`): desvia antes do `main()`, sem single-instance lock (spec §5.2). */
 async function boot(): Promise<void> {
   if (isMcpMode(process.argv)) {
+    // No Windows o Electron é binário GUI: `process.stdin` emite `end` na hora e nunca recebe
+    // dado (o processo fechava antes do `initialize`). Lendo/escrevendo direto nos fd 0/1 funciona.
+    const windows = process.platform === 'win32'
     await runMcp({
       app,
-      stdin: process.stdin,
-      stdout: process.stdout,
+      stdin: windows ? createReadStream('', { fd: 0 }) : process.stdin,
+      stdout: windows ? createWriteStream('', { fd: 1 }) : process.stdout,
       paths: appPaths(app.getPath('userData')),
       logger: log,
       launcherTarget: launcherTarget({
