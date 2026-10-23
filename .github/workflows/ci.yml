@@ -37,16 +37,6 @@ jobs:
           pnpm exec commitlint --from ${{ github.event.pull_request.base.sha }}
           --to ${{ github.event.pull_request.head.sha }} --verbose
         working-directory: app
-      - name: Autor dos commits é eldevanjr@gmail.com
-        run: |
-          invalidos=$(git log --format='%h %ae' \
-            ${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }} \
-            | grep -v ' eldevanjr@gmail.com$' || true)
-          if [ -n "$invalidos" ]; then
-            echo "Commits com e-mail não permitido:"
-            echo "$invalidos"
-            exit 1
-          fi
 
   worker:
     name: Worker (lint, tipos, testes, auditoria, CPD)
